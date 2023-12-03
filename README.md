@@ -17,20 +17,15 @@
    ```
    conda env create -f env.yml
    conda activate vamr
-   pip install -r requirements.txt
    ```
 
-### Installing the Project in Editable Mode
-
-The requirements.txt file contains a line that looks like this:
-
-```
-pip install -e .
-```
-This installs the project locally in editable mode, to make it eaasier to import files from the project into scripts or notebooks using absolute imports. This is also the recommended way to install your project when you want to use it in other projects. Without this line, files like `data/download_kitti.py` cannot import `constants.py` as easily as currently implemented.
-
 ## Usage
-ToDo: Explain how to run the project after installation. Include examples of how to use it, any necessary commands, and what the expected output is.
+
+### Downloading the Datasets
+To download the datasets, run the python script `download_datasets.py` from the project root directory:
+   ```
+   python3 download_datasets.py
+   ```
 
 ## Testing
 

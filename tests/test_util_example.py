@@ -1,5 +1,5 @@
 from hypothesis import given, strategies as st
-from util import add_numbers
+from utils import add_numbers
 
 
 @given(st.integers(), st.integers())
