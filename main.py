@@ -4,4 +4,3 @@ from src.initialization import *
 from src.utils import *
 
 # ToDo implement main loop
-
