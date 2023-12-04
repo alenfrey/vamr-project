@@ -18,10 +18,9 @@ dataset_loader = ParkingDataLoader(PARKING_DATA_DIR_PATH)
 fps_counter = FPSCounter()
 
 # example of loading the parking dataset with specific initialization frames
-init_frames = [0, 2]  # (frame 1 and frame 3 for initialization)
 dataset_loader = ParkingDataLoader(
     PARKING_DATA_DIR_PATH,
-    init_frame_indices=init_frames,
+    init_frame_indices=[0, 2],  # (frame 1 and frame 3 for initialization)
     image_type=cv2.IMREAD_GRAYSCALE,  # can also use cv2.IMREAD_COLOR for color images
 )
 
