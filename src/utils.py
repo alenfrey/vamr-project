@@ -27,7 +27,7 @@ def timer(f: callable) -> callable:
         start_time = time.time()
         result = f(*args, **kwargs)
         end_time = time.time()
-        print(f"Function {f.__name__} took: {(end_time - start_time):.4f} seconds.")
+        print(f"Function {f.__name__} took: {(end_time - start_time):.8f} seconds.")
         return result
 
     return wrap
