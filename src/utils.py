@@ -1,5 +1,5 @@
 """
-This script contains utility functions that are used in the other files.
+This file contains utility functions that are used in the other files.
 """
 
 import requests
@@ -36,7 +36,7 @@ def timer(f: callable) -> callable:
 @timer
 def download_file(url: str) -> io.BytesIO:
     """
-    Downloads a file from a given URL in a stream and returns it as a BytesIO object.
+    Download a file from a given URL in a stream and returns it as a BytesIO object.
 
     :param url: URL of the file to download.
     :return: BytesIO object containing the downloaded file.
@@ -59,7 +59,7 @@ def download_file(url: str) -> io.BytesIO:
 @timer
 def unzip_file(file_stream: io.BytesIO, target_folder: str):
     """
-    Unzips a BytesIO object to a specified target folder.
+    Unzip a BytesIO object to a specified target folder.
 
     :param file_stream: BytesIO object containing the zipped file.
     :param target_folder: Local directory path to extract the contents.
@@ -71,7 +71,7 @@ def unzip_file(file_stream: io.BytesIO, target_folder: str):
 @timer
 def download_and_unzip(url: str, target_folder: str):
     """
-    Downloads and unzips a file from a given URL to a specified target folder.
+    Download and unzip a file from a given URL to a specified target folder.
 
     :param url: URL of the file to download.
     :param target_folder: Local directory path to extract the contents.
