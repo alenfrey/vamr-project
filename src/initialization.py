@@ -86,9 +86,9 @@ def initialize_keypoints_harris(first_image, block_size, ksize, k):
         draw_cross(img_color, (x1, y1))
         draw_cross(img_color, (x2, y2))
 
-    # Display the result
-    cv2.imshow('Image with Yellow Crosses', img_color)
-    return corners
+    # # Display the result
+    # cv2.imshow('Image with Yellow Crosses', img_color)
+    return img_color, corners
 
 @timer
 def initialize_keypoints_sift(first_image):

@@ -40,7 +40,7 @@ descriptor_radius = 9
 match_lambda = 4
 
 # run Harris on first frame
-keypoints_1 = initialize_keypoints_harris(prev_image, corner_patch_size, kernel_size, harris_kappa)
+img_1, keypoints_1 = initialize_keypoints_harris(prev_image, corner_patch_size, kernel_size, harris_kappa)
 
 prev_keypoints = None
 
@@ -48,6 +48,8 @@ for iteration, (curr_image, pose, image_index) in enumerate(dataset_loader):
     print(f"Processing frame {image_index}...")
     # TODO: implement the main VO loop here, by implementing functions in src/continuous_operation.py or
     # similar modules in src/ directory.
+
+    curr_image, keypoints = initialize_keypoints_harris(curr_image, corner_patch_size, kernel_size, harris_kappa)
 
     # Keypoint Association
     # Use KLT or another method to find keypoints in the current frame and associate them with previous frame's keypoints.
