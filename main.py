@@ -30,7 +30,7 @@ R, t = initialize_vo(initialization_images, camera_intrinsics)
 prev_image = initialization_images[-1]
 # initialize keypoints
 # image_1, keypoints_1, descriptors_1 = initialize_keypoints(prev_image)
-# initialize parameter for Harris (TODO: tune)
+# initialize parameter for Harris (TODO: remove once finished in KLT)
 corner_patch_size = 9
 kernel_size = 3
 harris_kappa = 0.08
@@ -39,23 +39,23 @@ nonmaximum_supression_radius = 8
 descriptor_radius = 9
 match_lambda = 4
 
-# run Harris on first frame
+# run Harris on first frame (TODO: remove)
 img_1, keypoints_1 = initialize_keypoints_harris(prev_image, corner_patch_size, kernel_size, harris_kappa)
-
-prev_keypoints = None
 
 for iteration, (curr_image, pose, image_index) in enumerate(dataset_loader):
     print(f"Processing frame {image_index}...")
     # TODO: implement the main VO loop here, by implementing functions in src/continuous_operation.py or
     # similar modules in src/ directory.
 
-    curr_image, keypoints = initialize_keypoints_harris(curr_image, corner_patch_size, kernel_size, harris_kappa)
-
     # Keypoint Association
     # Use KLT or another method to find keypoints in the current frame and associate them with previous frame's keypoints.
     # if prev_keypoints is None:
     #     prev_keypoints = keypoints_1
-    associate_keypoints(curr_image, prev_image, prev_keypoints)
+    curr_image, curr_keypoints, prev_keypoints = associate_keypoints(curr_image, prev_image)
+    
+    # visualize keypoints on image
+    prev_image = curr_image.copy()
+    prev_keypoints = curr_keypoints.copy()
 
     # Pose Estimation
     # Use the associated keypoints to estimate the current camera pose.
