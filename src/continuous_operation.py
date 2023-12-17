@@ -3,21 +3,60 @@ This file contains the functions used in the VO pipeline during continuous opera
 """
 
 from src.utils import timer
+import cv2
+import numpy as np
 
 
 @timer
-def associate_keypoints(current_image, previous_image, previous_keypoints):
+def associate_keypoints(current_image, previous_image):
     """
     Associates keypoints in the current frame with those in the previous frame.
 
     :param current_image: The current frame as a numpy array.
     :param previous_image: The previous frame as a numpy array.
-    :param previous_keypoints: Keypoints detected in the previous frame.
-    :return: A tuple of (current_keypoints, associated_keypoints), where
-             current_keypoints are keypoints in the current frame, and
-             associated_keypoints are the corresponding keypoints from the previous frame.
+    :return: A tuple of (annotated_image, current_keypoints, associated_keypoints), where
+             current_keypoints are keypoints in the current frame, and associated_keypoints 
+             are the corresponding keypoints from the previous frame. Lastly, annotated_image
+             is the current frame with the associated keypoints drawn on it.
     """
-    pass
+    # initialize harris corner detector parameters
+    feature_params = dict(maxCorners=200,
+                        qualityLevel=0.01,
+                        minDistance=30,
+                        blockSize=9,
+                        k=0.04)
+    
+    # find keypoints in the current frame
+    previous_keypoints = cv2.goodFeaturesToTrack(previous_image, mask=None, useHarrisDetector=True, gradientSize=3, **feature_params)
+    
+    # Create a mask image for drawing purposes
+    mask = np.zeros_like(previous_image)
+    
+    # Parameters for lucas kanade optical flow
+    lk_params = dict( winSize  = (15, 15),
+                    maxLevel = 2,
+                    criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+    
+    # calculate optical flow
+    curr_keypoints, status, error = cv2.calcOpticalFlowPyrLK(
+        previous_image, current_image, previous_keypoints, None, **lk_params
+    )
+    
+    # select only the keypoints that were successfully tracked
+    if curr_keypoints is not None:
+        curr_keypoints = curr_keypoints[status == 1]
+        prev_keypoints = previous_keypoints[status == 1]
+        
+    # draw the tracks
+    # Create some random colors
+    color = np.random.randint(0, 255, (100, 3))
+    for i, (new, old) in enumerate(zip(curr_keypoints, prev_keypoints)):
+        a, b = new.ravel()
+        c, d = old.ravel()
+        mask = cv2.line(mask, (int(a), int(b)), (int(c), int(d)), color[i].tolist(), 2)
+        frame = cv2.circle(current_image, (int(a), int(b)), 5, color[i].tolist(), -1)
+    annotated_image = cv2.add(frame, mask)
+    return annotated_image, curr_keypoints, prev_keypoints
 
 
 def estimate_pose(
