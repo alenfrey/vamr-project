@@ -6,6 +6,7 @@ import requests
 import zipfile
 import io
 import time
+import numpy as np
 from tqdm import tqdm
 from functools import wraps
 
@@ -89,3 +90,11 @@ def download_and_unzip(url: str, target_folder: str):
 def add_numbers(x, y):
     """Function to add two numbers, used for example of unit testing."""
     return x + y
+
+
+def construct_homogeneous_matrix(R, t):
+    T = np.zeros((4, 4))
+    T[:3, :3] = R
+    T[:3, 3] = t.ravel() 
+    T[3, 3] = 1
+    return T

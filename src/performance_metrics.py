@@ -1,5 +1,22 @@
 import time
 import cv2
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+
+
+def calculate_pose_error(estimated_pose, true_pose):
+    # positon error
+    estimated_position = estimated_pose[:3, 3]
+    true_position = true_pose[:3, 3]
+    position_error = np.linalg.norm(estimated_position - true_position)
+
+    # orientation error
+    estimated_orientation = R.from_matrix(estimated_pose[:3, :3])
+    true_orientation = R.from_matrix(true_pose[:3, :3])
+    orientation_error = R.inv(true_orientation) * estimated_orientation
+    angle_error = orientation_error.magnitude()
+
+    return position_error, angle_error
 
 
 class FPSCounter:

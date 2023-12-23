@@ -1,89 +1,99 @@
 import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+np.set_printoptions(precision=3, suppress=True)
 
 from constants import *
 from src.camera_calibration import *
-from src.initialization import initialize_vo, ensure_grayscale, initialize_keypoints_harris, initialize_keypoints_sift
+from src.initialization import (
+    initialize_vo,
+)
 from src.utils import *
 from src.data_loaders import ParkingDataLoader
 from src.continuous_operation import (
     associate_keypoints,
     estimate_pose,
     triangulate_landmarks,
-    update_map_and_state,
-    visualize_vo,
+    find_2D_to_3D_correspondences,
 )
-from src.performance_metrics import FPSCounter
+from src.performance_metrics import FPSCounter, calculate_pose_error
 
-dataset_loader = ParkingDataLoader(PARKING_DATA_DIR_PATH)
 fps_counter = FPSCounter()
-
-# example of loading the parking dataset with specific initialization frames
 dataset_loader = ParkingDataLoader(
     PARKING_DATA_DIR_PATH,
-    init_frame_indices=[0, 2],  # (frame 1 and frame 3 for initialization)
+    init_frame_indices=[0, 1, 2],  # (frame indices for initialization)
     image_type=cv2.IMREAD_GRAYSCALE,  # can also use cv2.IMREAD_COLOR for color images
 )
 
 camera_intrinsics = dataset_loader.load_camera_intrinsics()
 initialization_images = dataset_loader.get_initialization_frames()
-R, t = initialize_vo(initialization_images, camera_intrinsics)
+R, t, points_3d = initialize_vo(initialization_images, camera_intrinsics)
+
+projected_points, _ = cv2.projectPoints(
+    points_3d, R, t, camera_intrinsics, distCoeffs=None
+)
+
 prev_image = initialization_images[-1]
-# initialize keypoints
-# image_1, keypoints_1, descriptors_1 = initialize_keypoints(prev_image)
-# initialize parameter for Harris (TODO: remove once finished in KLT)
-corner_patch_size = 9
-kernel_size = 3
-harris_kappa = 0.08
-num_keypoints = 200
-nonmaximum_supression_radius = 8
-descriptor_radius = 9
-match_lambda = 4
 
-# run Harris on first frame (TODO: remove)
-img_1, keypoints_1 = initialize_keypoints_harris(prev_image, corner_patch_size, kernel_size, harris_kappa)
-
-for iteration, (curr_image, pose, image_index) in enumerate(dataset_loader):
+for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loader):
+    print(f"pose: {actual_pose}")
     print(f"Processing frame {image_index}...")
-    # TODO: implement the main VO loop here, by implementing functions in src/continuous_operation.py or
-    # similar modules in src/ directory.
 
-    # Keypoint Association
-    # Use KLT or another method to find keypoints in the current frame and associate them with previous frame's keypoints.
-    # if prev_keypoints is None:
-    #     prev_keypoints = keypoints_1
-    curr_image, curr_keypoints, prev_keypoints = associate_keypoints(curr_image, prev_image)
-    
-    # visualize keypoints on image
+    curr_image, curr_keypoints, prev_keypoints = associate_keypoints(
+        curr_image, prev_image
+    )
+
+    # Check if keypoints are found
+    if curr_keypoints is None or len(curr_keypoints) == 0:
+        print("No keypoints found in the current frame.")
+        continue  # Skip to the next frame
+
+    # 2D to 3D Correspondences
+    try:
+        matched_keypoints_2D, matched_points_3D = find_2D_to_3D_correspondences(
+            points_3d, curr_keypoints, R, t, camera_intrinsics
+        )
+    except Exception as e:
+        print(f"Error in finding 2D-3D correspondences: {e}")
+        continue  # Skip to the next frame
+
+    # Check if valid correspondences are found
+    if not matched_keypoints_2D or not matched_points_3D:
+        print("No valid 2D-3D correspondences found.")
+        continue  # Skip to the next frame
+
+    try:
+        R, t, inliers = estimate_pose(
+            matched_keypoints_2D, matched_points_3D, camera_intrinsics
+        )
+    except Exception as e:
+        print(f"Error in pose estimation: {e}")
+        continue
+
     prev_image = curr_image.copy()
-    prev_keypoints = curr_keypoints.copy()
+    new_points_3D = triangulate_landmarks(
+        prev_keypoints, curr_keypoints, R, t, camera_intrinsics
+    )
 
-    # Pose Estimation
-    # Use the associated keypoints to estimate the current camera pose.
-    estimate_pose(..., ..., ..., ...)
+    points_3d = (
+        np.vstack([points_3d, new_points_3D]) if points_3d.size else new_points_3D
+    )
 
-    # Landmark Triangulation
-    # Triangulate new landmarks based on current and previous frames.
-    triangulate_landmarks(..., ..., ...)
+    estimated_pose = construct_homogeneous_matrix(R, t)
+    print(f"Homogeneous estimated pose: {estimated_pose}")
+    position_error, angle_error = calculate_pose_error(estimated_pose, actual_pose)
 
-    # Map and State Update
-    # Update your map and system state with new information.
-    update_map_and_state(..., ..., ..., ...)
+    print(f"Position error: {position_error}")
+    print(f"Angle error: {angle_error}")
 
-    # Visualization
-    # Visualize keypoints, camera trajectory, and landmarks.
-    visualize_vo(curr_image, ..., ..., ...)
-
-    # Performance Evaluation
-    # Calculate Performance Metrics
-    # Update FPS counter and display FPS
     fps = fps_counter.update()
     fps_counter.put_fps_on_image(curr_image, fps)
 
     cv2.imshow("Image Stream", curr_image)
-
-    # Wait for 30ms or until a key is pressed; if 'q' is pressed, break the loop
     if cv2.waitKey(30) & 0xFF == ord("q"):
         break
+
 
 # When everything is done, release the OpenCV window
 cv2.destroyAllWindows()
