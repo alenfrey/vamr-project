@@ -16,8 +16,12 @@ from src.continuous_operation import (
     estimate_pose,
     triangulate_landmarks,
     find_2D_to_3D_correspondences,
+    update_points_3d,
 )
 from src.performance_metrics import FPSCounter, calculate_pose_error
+
+# Define a threshold for minimum old points
+MIN_OLD_POINTS_THRESHOLD = 50
 
 fps_counter = FPSCounter()
 dataset_loader = ParkingDataLoader(
@@ -35,6 +39,7 @@ projected_points, _ = cv2.projectPoints(
 )
 
 prev_image = initialization_images[-1]
+prev_matched_keypoints_2D = None
 
 for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loader):
     print(f"pose: {actual_pose}")
@@ -72,13 +77,39 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
         continue
 
     prev_image = curr_image.copy()
-    new_points_3D = triangulate_landmarks(
-        prev_keypoints, curr_keypoints, R, t, camera_intrinsics
-    )
+    # new_points_3D = triangulate_landmarks(
+    #     prev_keypoints, curr_keypoints, R, t, camera_intrinsics
+    # )
 
-    points_3d = (
-        np.vstack([points_3d, new_points_3D]) if points_3d.size else new_points_3D
-    )
+    # points_3d = (
+    #     np.vstack([points_3d, new_points_3D]) if points_3d.size else new_points_3D
+    # )
+    
+    # Count the number of matched old points in the current frame
+    if prev_matched_keypoints_2D is not None:
+        matched_old_points_count = len(prev_matched_keypoints_2D)
+    else:
+        matched_old_points_count = 0
+
+    # Check if the number of matched old points is below the threshold
+    if matched_old_points_count < MIN_OLD_POINTS_THRESHOLD:
+        # Triangulate new 3D landmarks
+        print(f"Number of matched old points: {matched_old_points_count}.")
+        print("Triangulating new 3D landmarks...")
+        new_points_3D = triangulate_landmarks(
+            prev_keypoints, curr_keypoints, R, t, camera_intrinsics
+        )
+
+        # Add the new 3D points to the existing points
+        points_3d = (
+            np.vstack([points_3d, new_points_3D]) if points_3d.size else new_points_3D
+        )
+        
+        # Update points_3d with new points and maintain size limit
+        points_3d = update_points_3d(points_3d, new_points_3D)    
+    
+    prev_matched_keypoints_2D = matched_keypoints_2D.copy()
+    
 
     estimated_pose = construct_homogeneous_matrix(R, t)
     print(f"Homogeneous estimated pose: {estimated_pose}")

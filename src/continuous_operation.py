@@ -5,6 +5,10 @@ This file contains the functions used in the VO pipeline during continuous opera
 from src.utils import timer
 import cv2
 import numpy as np
+from scipy.sparse import lil_matrix
+
+# Define a maximum number of points to keep
+MAX_POINTS = 500
 
 
 @timer
@@ -62,6 +66,9 @@ def associate_keypoints(current_image, previous_image):
         mask = cv2.line(mask, (int(a), int(b)), (int(c), int(d)), color[i].tolist(), 2)
         frame = cv2.circle(current_image, (int(a), int(b)), 5, color[i].tolist(), -1)
     annotated_image = cv2.add(frame, mask)
+    
+    # annotated_image = current_image.copy()
+    
     return annotated_image, curr_keypoints, prev_keypoints
 
 
@@ -140,6 +147,44 @@ def triangulate_landmarks(keypoints_1, keypoints_2, R, t, camera_intrinsics):
     points_3D = points_3D.T
 
     return points_3D
+
+
+# Function to add new points and maintain the maximum size
+def update_points_3d(points_3d, new_points):
+    if points_3d.size:
+        updated_points_3d = np.vstack([points_3d, new_points])
+    else:
+        updated_points_3d = new_points
+
+    # If the number of points exceeds the maximum, remove the oldest points
+    if updated_points_3d.shape[0] > MAX_POINTS:
+        # Keep only the most recent MAX_POINTS
+        updated_points_3d = updated_points_3d[-MAX_POINTS:]
+
+    return updated_points_3d
+
+
+def bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indices):
+    m = camera_indices.size * 2  # Number of observations
+    n = n_cameras * 6 + n_points * 3  # Number of parameters
+    A = lil_matrix((m, n), dtype=int)
+
+    i = np.arange(camera_indices.size)
+    for s in range(6):
+        A[2 * i, camera_indices * 6 + s] = 1
+        A[2 * i + 1, camera_indices * 6 + s] = 1
+
+    for s in range(3):
+        A[2 * i, n_cameras * 6 + point_indices * 3 + s] = 1
+        A[2 * i + 1, n_cameras * 6 + point_indices * 3 + s] = 1
+
+    return A
+
+def bundle_adjustment(params, n_cameras, n_points, camera_indices, point_indices, points_2d):
+    camera_params = params[:n_cameras * 6].reshape((n_cameras, 6))
+    points_3d = params[n_cameras * 6:].reshape((n_points, 3))
+    points_proj = project(points_3d[point_indices], camera_params[camera_indices])
+    return (points_proj - points_2d).ravel()
 
 
 def update_map_and_state(map, state, new_landmarks, current_pose):
