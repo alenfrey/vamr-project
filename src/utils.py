@@ -7,8 +7,18 @@ import zipfile
 import io
 import time
 import numpy as np
+import cv2
 from tqdm import tqdm
 from functools import wraps
+
+
+def draw_lines(image, pts_prev, pts_curr):
+    visualized_image = image.copy()
+    for pt_prev, pt_curr in zip(pts_prev, pts_curr):
+        start_point = (int(pt_prev[0][0]), int(pt_prev[0][1]))  # Previous image point
+        end_point = (int(pt_curr[0][0]), int(pt_curr[0][1]))  # Current image point
+        cv2.line(visualized_image, start_point, end_point, (255, 0, 0), 1)  # Blue color
+    return visualized_image
 
 
 def timer(f: callable) -> callable:
@@ -95,6 +105,6 @@ def add_numbers(x, y):
 def construct_homogeneous_matrix(R, t):
     T = np.zeros((4, 4))
     T[:3, :3] = R
-    T[:3, 3] = t.ravel() 
+    T[:3, 3] = t.ravel()
     T[3, 3] = 1
     return T

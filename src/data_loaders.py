@@ -25,6 +25,8 @@ class VODataLoader:
         pass
 
     def get_initialization_frames(self):
+        print(f"Total images available: {len(self.image_paths)}")  # Debugging line
+        print(f"Initialization indices: {self.init_frame_indices}")  # Debugging line
         return [
             self.load_image(self.image_paths[idx]) for idx in self.init_frame_indices
         ]
@@ -78,3 +80,39 @@ class ParkingDataLoader(VODataLoader):
         # from the exercise sheet instead of this one
         poses = [np.vstack((pose.reshape(3, 4), [0, 0, 0, 1])) for pose in flat_poses]
         return np.array(poses)
+
+
+class KittiDataLoader(VODataLoader):
+    def __init__(
+        self, dataset_path, init_frame_indices=None, image_type=cv2.IMREAD_GRAYSCALE
+    ):
+        super().__init__(dataset_path, init_frame_indices)
+        self.image_type = image_type
+
+    def load_camera_intrinsics(self):
+        # Assuming we are using P2 (3x4 projection matrix for the left color camera)
+        calib_path = self.dataset_path / "05" / "calib.txt"
+        with open(calib_path, "r") as file:
+            lines = file.readlines()
+            for line in lines:
+                if line.startswith("P0"):
+                    values = line.split()[1:]
+                    intrinsic_matrix = np.array([float(v) for v in values]).reshape(
+                        3, 4
+                    )
+                    return intrinsic_matrix[:3, :3]
+        return None
+
+    def setup_image_loader(self):
+        image_directory = self.dataset_path / "05" / "image_0"
+        print(f"Image directory: {image_directory}")
+        return sorted(image_directory.glob("*.png"))
+
+    def load_poses(self):
+        poses_path = self.dataset_path / "poses" / "05.txt"
+        flat_poses = np.genfromtxt(poses_path, dtype=float)
+        poses = [np.vstack((pose.reshape(3, 4), [0, 0, 0, 1])) for pose in flat_poses]
+        return np.array(poses)
+
+    def load_image(self, image_path):
+        return cv2.imread(str(image_path), self.image_type)
