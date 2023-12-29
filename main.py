@@ -14,30 +14,31 @@ from src.visualization import *
 sift_params = {
     "nfeatures": 0,
     "nOctaveLayers": 3,
-    "contrastThreshold": 0.02,  # default 0.04
-    "edgeThreshold": 50,  #
+    "contrastThreshold": 0.02,
+    "edgeThreshold": 50,
     "sigma": 1.6,
 }
 sift_detector = cv2.SIFT_create(**sift_params)
 
 FLANN_INDEX_KDTREE = 1
 index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
-search_params = dict(checks=50)  # or pass an empty dictionary
+search_params = dict(checks=50)
 flann_matcher = cv2.FlannBasedMatcher(index_params, search_params)
 
 dataset_loader = ParkingDataLoader(
     PARKING_DATA_DIR_PATH,
     init_frame_indices=[0, 2],
-    image_type=cv2.IMREAD_GRAYSCALE,
+    image_type=cv2.IMREAD_UNCHANGED,
 )
 
-# dataset_loader = KittiDataLoader(
-#     KITTI_DATA_DIR_PATH,
-#     init_frame_indices=[0, 2],
-#     image_type=cv2.IMREAD_GRAYSCALE,
-# )
+dataset_loader = KittiDataLoader(
+    KITTI_DATA_DIR_PATH,
+    init_frame_indices=[0, 2],
+    image_type=cv2.IMREAD_UNCHANGED,
+)
 
-visualizer = RealTimePoseVisualizer()
+
+visualizer = VOVisualizer()
 
 camera_intrinsics = dataset_loader.load_camera_intrinsics()
 initialization_images = dataset_loader.get_initialization_frames()
@@ -50,9 +51,9 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
 
     curr_keypoints, curr_descriptors = sift_detector.detectAndCompute(curr_image, None)
     matches = flann_matcher.knnMatch(prev_descriptors, curr_descriptors, k=2)
-    good_matches = [m for m, n in matches if m.distance < 0.8 * n.distance]
+    good_matches = [m for m, n in matches if m.distance < 0.4 * n.distance]
 
-    # Extract the matched keypoints' coordinates
+    # extract the matched keypoints' coordinates
     pts_prev = np.float32(
         [prev_keypoints[m.queryIdx].pt for m in good_matches]
     ).reshape(-1, 1, 2)
@@ -69,22 +70,25 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
         threshold=1.0,
     )
 
-    # Recover the relative camera pose
+    # TODO: how can we use the mask to filter out outliers?
+    
+    # recover the relative camera pose
     _, R, t, _ = cv2.recoverPose(E, pts_curr, pts_prev, camera_intrinsics)
 
     estimated_pose = construct_homogeneous_matrix(R, t)
-    global_pose = np.dot(global_pose, estimated_pose)
+    global_pose = global_pose @ estimated_pose
     print(f"Estimated pose:\n{global_pose}")
     print(f"Actual pose:\n{actual_pose}")
 
-    curr_image = draw_lines(curr_image, pts_prev, pts_curr) # draw the lines between the matched keypoints
-    visualizer.update_plot(global_pose, curr_image) # show the current image and 3d visualization
+    curr_image = draw_lines(
+        curr_image, pts_prev, pts_curr
+    )  # draw the lines between the matched keypoints
+    visualizer.update_plot(
+        global_pose, curr_image
+    )  # show the current image and 3d visualization
 
-    prev_image = curr_image.copy()
+    prev_image = curr_image.copy()  # save current image as previous for next iteration
     prev_keypoints, prev_descriptors = curr_keypoints, curr_descriptors
 
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
-
-# Release the OpenCV window
-cv2.destroyAllWindows()

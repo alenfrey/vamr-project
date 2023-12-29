@@ -161,5 +161,4 @@ cython_debug/
 
 # Datasets
 
-data/raw/
-data/processed/
+data/

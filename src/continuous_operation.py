@@ -141,27 +141,3 @@ def triangulate_landmarks(keypoints_1, keypoints_2, R, t, camera_intrinsics):
 
     return points_3D
 
-
-def update_map_and_state(map, state, new_landmarks, current_pose):
-    """
-    Updates the map and the state of the VO system.
-
-    :param map: The current map of the environment.
-    :param state: The current state of the VO system.
-    :param new_landmarks: New landmarks to be added to the map.
-    :param current_pose: The current pose of the camera.
-    :return: Updated map and state.
-    """
-    pass
-
-
-def visualize_vo(image, keypoints, trajectory, landmarks):
-    """
-    Visualizes the current state of the VO system.
-
-    :param image: The current frame.
-    :param keypoints: Current detected keypoints.
-    :param trajectory: The trajectory of the camera.
-    :param landmarks: The landmarks in the map.
-    """
-    pass

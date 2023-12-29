@@ -116,3 +116,28 @@ class KittiDataLoader(VODataLoader):
 
     def load_image(self, image_path):
         return cv2.imread(str(image_path), self.image_type)
+
+
+class MalagaDataLoader(VODataLoader):
+    def __init__(
+        self, dataset_path, init_frame_indices=None, image_type=cv2.IMREAD_GRAYSCALE
+    ):
+        super().__init__(dataset_path, init_frame_indices)
+        self.image_type = image_type
+        self.K = np.array(
+            [[837.619011, 0, 522.434637], [0, 839.808333, 402.367400], [0, 0, 1]]
+        )
+
+    def load_camera_intrinsics(self):
+        return self.K
+
+    def setup_image_loader(self):
+        image_directory = self.dataset_path / "Images"
+        all_images = sorted(image_directory.glob("*.jpg"))
+        left_images = [img for img in all_images if "left" in img.name]
+        return left_images
+
+    def load_image(self, image_path):
+        return cv2.imread(str(image_path), self.image_type)
+
+    # load_poses method is not implemented yet, unsure of how to do it atm, need to research more

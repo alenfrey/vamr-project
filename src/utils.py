@@ -14,10 +14,23 @@ from functools import wraps
 
 def draw_lines(image, pts_prev, pts_curr):
     visualized_image = image.copy()
+
+    # Define line thickness
+    line_thickness = 1
+    outline_thickness = 2
+
     for pt_prev, pt_curr in zip(pts_prev, pts_curr):
         start_point = (int(pt_prev[0][0]), int(pt_prev[0][1]))  # Previous image point
         end_point = (int(pt_curr[0][0]), int(pt_curr[0][1]))  # Current image point
-        cv2.line(visualized_image, start_point, end_point, (255, 0, 0), 1)  # Blue color
+
+        cv2.line(
+            visualized_image, start_point, end_point, (0,0,0), outline_thickness
+        )
+        
+        cv2.line(visualized_image, start_point, end_point, (255, 255, 255), line_thickness)
+
+        
+
     return visualized_image
 
 
