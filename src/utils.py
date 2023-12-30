@@ -28,8 +28,7 @@ def ensure_grayscale(image):
         return image
 
 
-
-def draw_lines(image, pts_prev, pts_curr):
+def draw_lines_onto_image(image, pts_prev, pts_curr):
     visualized_image = image.copy()
 
     # Define line thickness

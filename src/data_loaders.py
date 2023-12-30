@@ -3,6 +3,7 @@ This file contains the data loaders for the VO pipeline, to load different datas
 """
 
 from pathlib import Path
+from constants import *
 import numpy as np
 import cv2
 
@@ -55,7 +56,10 @@ class VODataLoader:
 
 class ParkingDataLoader(VODataLoader):
     def __init__(
-        self, dataset_path, init_frame_indices=None, image_type=cv2.IMREAD_GRAYSCALE
+        self,
+        dataset_path=PARKING_DATA_DIR_PATH,
+        init_frame_indices=None,
+        image_type=cv2.IMREAD_UNCHANGED,
     ):
         super().__init__(dataset_path, init_frame_indices)
         # image_type can be cv2.IMREAD_GRAYSCALE or cv2.IMREAD_COLOR or cv2.IMREAD_UNCHANGED
@@ -84,7 +88,10 @@ class ParkingDataLoader(VODataLoader):
 
 class KittiDataLoader(VODataLoader):
     def __init__(
-        self, dataset_path, init_frame_indices=None, image_type=cv2.IMREAD_GRAYSCALE
+        self,
+        dataset_path=KITTI_DATA_DIR_PATH,
+        init_frame_indices=None,
+        image_type=cv2.IMREAD_UNCHANGED,
     ):
         super().__init__(dataset_path, init_frame_indices)
         self.image_type = image_type
@@ -120,7 +127,10 @@ class KittiDataLoader(VODataLoader):
 
 class MalagaDataLoader(VODataLoader):
     def __init__(
-        self, dataset_path, init_frame_indices=None, image_type=cv2.IMREAD_GRAYSCALE
+        self,
+        dataset_path=MALAGA_DATA_DIR_PATH,
+        init_frame_indices=None,
+        image_type=cv2.IMREAD_UNCHANGED,
     ):
         super().__init__(dataset_path, init_frame_indices)
         self.image_type = image_type

@@ -4,40 +4,11 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 
-def calculate_reprojection_error(projected_points_2D, original_keypoints):
-    """
-    Calculate the average reprojection error.
-
-    Parameters:
-    projected_points_2D (np.array): Projected 2D points from 3D points.
-    original_keypoints (np.array): Original 2D keypoints used for triangulation.
-
-    Returns:
-    float: Average reprojection error.
-    """
-    total_error = 0
-    count = 0
-
-    for projected, original in zip(projected_points_2D, original_keypoints):
-        # Reshape projected point for compatibility
-        projected_reshaped = projected[0].ravel()
-
-        # Ensure both points are not NaN and have the same dimension
-        if (
-            not np.isnan(projected_reshaped).any()
-            and not np.isnan(original.ravel()).any()
-            and len(projected_reshaped) == len(original.ravel())
-        ):
-            error = cv2.norm(original, projected_reshaped, cv2.NORM_L2)
-            total_error += error
-            count += 1
-
-    if count > 0:
-        average_error = total_error / count
-    else:
-        average_error = float("inf")
-
-    return average_error
+def calculate_reprojection_error(projected_points, actual_points):
+    reprojection_errors = np.linalg.norm(projected_points - actual_points, axis=2)
+    mean_error = np.mean(reprojection_errors)
+    std_error = np.std(reprojection_errors)
+    return reprojection_errors, mean_error, std_error
 
 
 class FPSCounter:
