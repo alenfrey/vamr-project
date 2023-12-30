@@ -1,4 +1,7 @@
 from pathlib import Path
+import numpy as np
+
+np.set_printoptions(precision=3, suppress=True)
 
 # project root directory path
 PROJECT_ROOT_DIR_PATH = Path(__file__).parent

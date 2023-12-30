@@ -4,19 +4,40 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 
-def calculate_pose_error(estimated_pose, true_pose):
-    # positon error
-    estimated_position = estimated_pose[:3, 3]
-    true_position = true_pose[:3, 3]
-    position_error = np.linalg.norm(estimated_position - true_position)
+def calculate_reprojection_error(projected_points_2D, original_keypoints):
+    """
+    Calculate the average reprojection error.
 
-    # orientation error
-    estimated_orientation = R.from_matrix(estimated_pose[:3, :3])
-    true_orientation = R.from_matrix(true_pose[:3, :3])
-    orientation_error = R.inv(true_orientation) * estimated_orientation
-    angle_error = orientation_error.magnitude()
+    Parameters:
+    projected_points_2D (np.array): Projected 2D points from 3D points.
+    original_keypoints (np.array): Original 2D keypoints used for triangulation.
 
-    return position_error, angle_error
+    Returns:
+    float: Average reprojection error.
+    """
+    total_error = 0
+    count = 0
+
+    for projected, original in zip(projected_points_2D, original_keypoints):
+        # Reshape projected point for compatibility
+        projected_reshaped = projected[0].ravel()
+
+        # Ensure both points are not NaN and have the same dimension
+        if (
+            not np.isnan(projected_reshaped).any()
+            and not np.isnan(original.ravel()).any()
+            and len(projected_reshaped) == len(original.ravel())
+        ):
+            error = cv2.norm(original, projected_reshaped, cv2.NORM_L2)
+            total_error += error
+            count += 1
+
+    if count > 0:
+        average_error = total_error / count
+    else:
+        average_error = float("inf")
+
+    return average_error
 
 
 class FPSCounter:

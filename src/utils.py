@@ -10,6 +10,23 @@ import numpy as np
 import cv2
 from tqdm import tqdm
 from functools import wraps
+import cv2
+import cv2
+import numpy as np
+
+
+def ensure_grayscale(image):
+    """
+    Convert an image to grayscale if it is not already.
+    """
+    # return image if image.ndim == 2 else cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) -> Alternative short
+    # check if the image has more than one channel (i.e., is not grayscale)
+    if len(image.shape) > 2 and image.shape[2] > 1:
+        return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        # the image is already grayscale
+        return image
+
 
 
 def draw_lines(image, pts_prev, pts_curr):
@@ -23,13 +40,11 @@ def draw_lines(image, pts_prev, pts_curr):
         start_point = (int(pt_prev[0][0]), int(pt_prev[0][1]))  # Previous image point
         end_point = (int(pt_curr[0][0]), int(pt_curr[0][1]))  # Current image point
 
-        cv2.line(
-            visualized_image, start_point, end_point, (0,0,0), outline_thickness
-        )
-        
-        cv2.line(visualized_image, start_point, end_point, (255, 255, 255), line_thickness)
+        cv2.line(visualized_image, start_point, end_point, (0, 0, 0), outline_thickness)
 
-        
+        cv2.line(
+            visualized_image, start_point, end_point, (255, 255, 255), line_thickness
+        )
 
     return visualized_image
 
@@ -110,14 +125,5 @@ def download_and_unzip(url: str, target_folder: str):
         print(f"An error occurred: {e}")
 
 
-def add_numbers(x, y):
-    """Function to add two numbers, used for example of unit testing."""
-    return x + y
-
-
 def construct_homogeneous_matrix(R, t):
-    T = np.zeros((4, 4))
-    T[:3, :3] = R
-    T[:3, 3] = t.ravel()
-    T[3, 3] = 1
-    return T
+    return np.block([[R, t.reshape(-1, 1)], [np.zeros((1, 3)), np.ones((1, 1))]])

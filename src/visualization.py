@@ -8,8 +8,8 @@ from matplotlib import cm
 class VOVisualizer:
     def __init__(self):
         self.fig = plt.figure()
-        self.range = 30
-        self.pose_history = []  # To store the history of poses
+        self.range = 200
+        self.pose_history = []  # to store the history of poses
 
         self.ax_pose = self.fig.add_subplot(121, projection="3d")
         self.setup_axes()
@@ -26,7 +26,7 @@ class VOVisualizer:
         self.ax_pose.set_ylabel("Y axis")
         self.ax_pose.set_zlabel("Z axis")
 
-    def update_plot(self, pose, image):
+    def update_plot(self, pose, image, points_3D, colors=None):
         # extract the translation vector (current position)
         t = pose[:3, 3]
 
@@ -43,25 +43,47 @@ class VOVisualizer:
         # plot the pose history
         if self.pose_history:
             history_array = np.array(self.pose_history)
-            self.ax_pose.plot(history_array[:, 0], history_array[:, 1], history_array[:, 2], color="gray", alpha=0.5)
+            self.ax_pose.plot(
+                history_array[:, 0],
+                history_array[:, 1],
+                history_array[:, 2],
+                color="gray",
+                alpha=0.5,
+            )
 
         # plot the current pose orientation
         R = pose[:3, :3]
-        self.ax_pose.quiver(t[0], t[1], t[2], R[0, 0], R[1, 0], R[2, 0], length=3, color="r")
-        self.ax_pose.quiver(t[0], t[1], t[2], R[0, 1], R[1, 1], R[2, 1], length=3, color="g")
-        self.ax_pose.quiver(t[0], t[1], t[2], R[0, 2], R[1, 2], R[2, 2], length=3, color="b")
-
-        landmarks = np.random.rand(3, 100) * 10
-
-        # plot the landmarks
-        self.ax_pose.scatter3D(
-            landmarks[0, :],
-            landmarks[1, :],
-            landmarks[2, :],
-            c="black",
-            s=0.5,
+        self.ax_pose.quiver(
+            t[0], t[1], t[2], R[0, 0], R[1, 0], R[2, 0], length=5, color="r"
         )
-        
+        self.ax_pose.quiver(
+            t[0], t[1], t[2], R[0, 1], R[1, 1], R[2, 1], length=5, color="g"
+        )
+        self.ax_pose.quiver(
+            t[0], t[1], t[2], R[0, 2], R[1, 2], R[2, 2], length=5, color="b"
+        )
+
+        if colors is not None and colors.size > 0 and points_3D is not None:
+            # Ensure colors are normalized (range 0 to 1) if they are in the standard 0-255 range
+            if np.max(colors) > 1:
+                colors = colors / 255.0
+
+            self.ax_pose.scatter3D(
+                points_3D[0, :],
+                points_3D[1, :],
+                points_3D[2, :],
+                c=colors,
+                s=10,
+            )
+        elif points_3D is not None:
+            self.ax_pose.scatter3D(
+                points_3D[0, :],
+                points_3D[1, :],
+                points_3D[2, :],
+                c="black",
+                s=0.5,
+            )
+
         # update the image subplot
         if image is not None:
             self.ax_image.clear()
@@ -70,5 +92,4 @@ class VOVisualizer:
 
         # Update the plot
         plt.draw()
-        plt.pause(0.0001)
-
+        plt.pause(0.00001)
