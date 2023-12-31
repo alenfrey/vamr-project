@@ -126,3 +126,36 @@ def download_and_unzip(url: str, target_folder: str):
 
 def construct_homogeneous_matrix(R, t):
     return np.block([[R, t.reshape(-1, 1)], [np.zeros((1, 3)), np.ones((1, 1))]])
+
+
+def deconstruct_homogeneous_matrix(H):
+    return H[:3, :3], H[:3, 3]
+
+
+def compare_poses(actual_pose, estimated_pose):
+    """
+    Compare two 4x4 homogeneous matrices representing poses and return the
+    translation and rotation differences.
+
+    Parameters:
+    actual_pose (numpy.ndarray): The ground truth pose as a 4x4 matrix.
+    estimated_pose (numpy.ndarray): The estimated pose as a 4x4 matrix.
+
+    Returns:
+    tuple: A tuple containing the translation difference (float) and the
+           rotation difference in radians (float).
+    """
+    rotation_actual, translation_actual = deconstruct_homogeneous_matrix(actual_pose)
+    rotation_estimated, translation_estimated = deconstruct_homogeneous_matrix(
+        estimated_pose
+    )
+    # Compute translation difference
+    translation_diff = np.linalg.norm(translation_actual - translation_estimated)
+
+    # Compute rotation difference
+    # Clamp value to the valid range for arccos due to possible numerical issues
+    rotation_diff_val = (np.trace(rotation_actual.T @ rotation_estimated) - 1) / 2
+    rotation_diff_val = np.clip(rotation_diff_val, -1.0, 1.0)
+    rotation_diff = np.arccos(rotation_diff_val)
+
+    return translation_diff, rotation_diff

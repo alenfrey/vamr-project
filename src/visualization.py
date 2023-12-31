@@ -50,13 +50,7 @@ class VOVisualizer:
             self.ax_image.axis("off")
             self.ax_image.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
-    def update_points_plot(self, pts_curr):
-        """
-        Update the plot with 2D points, matching the aspect ratio and resolution of the image plot.
-
-        pts_curr: numpy array
-            Array of points with shape (n, 1, 2) where each point is represented by (x, y).
-        """
+    def update_points_plot(self, pts_curr, pts_reprojected):
         self.ax_extra.clear()
 
         # Reshape pts_curr to a two-dimensional array of shape (n, 2)
@@ -64,7 +58,7 @@ class VOVisualizer:
 
         # Scatter plot of points
         x, y = points[:, 0], points[:, 1]
-        self.ax_extra.scatter(x, y, c="blue", label="2D Points")
+        self.ax_extra.scatter(x, y, c="blue", label="2D Points", alpha=0.5)
 
         # Get the bounding box of the image axis
         bbox = self.ax_image.get_window_extent().transformed(
@@ -80,9 +74,14 @@ class VOVisualizer:
         self.ax_extra.set_ylim(self.ax_image.get_ylim())
 
         self.ax_extra.legend()
-        self.ax_extra.set_title("2D Points Visualization")
+        self.ax_extra.set_title("2D Points and Reprojected Points")
         self.ax_extra.set_xlabel("x")
         self.ax_extra.set_ylabel("y")
+        
+        if pts_reprojected is not None:
+            points = pts_reprojected.reshape(-1, 2)
+            self.ax_extra.scatter(points[:, 0], points[:, 1], c="red", label="Reprojected Points", alpha=0.5)
+            self.ax_extra.legend()
 
     def update_line_chart(self, new_data):
         if new_data is None:

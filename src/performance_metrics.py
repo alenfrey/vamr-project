@@ -6,9 +6,7 @@ from scipy.spatial.transform import Rotation as R
 
 def calculate_reprojection_error(projected_points, actual_points):
     reprojection_errors = np.linalg.norm(projected_points - actual_points, axis=2)
-    mean_error = np.mean(reprojection_errors)
-    std_error = np.std(reprojection_errors)
-    return reprojection_errors, mean_error, std_error
+    return reprojection_errors
 
 
 class FPSCounter:
