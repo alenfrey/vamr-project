@@ -121,6 +121,7 @@ print(f"relative_pose_estimate:\n{relative_pose_estimate}")
 print(f"relative_pose_ground_truth:\n{relative_pose_ground_truth}")
 print(compare_poses(relative_pose_ground_truth, relative_pose_estimate))
 
+
 def triangulate_points(pts_a, pts_b, K, relative_pose):
     """Triangulates points from two images"""
     R = relative_pose[:3, :3]  # Rotation matrix from the relative pose
@@ -136,8 +137,9 @@ def triangulate_points(pts_a, pts_b, K, relative_pose):
     return pts3D, pts4D
 
 
-pts3D, pts4D = triangulate_points(pts_a_inliers, pts_b_inliers, K, relative_pose_estimate)
-
+pts3D, pts4D = triangulate_points(
+    pts_a_inliers, pts_b_inliers, K, relative_pose_estimate
+)
 
 
 
@@ -194,6 +196,7 @@ depths = pts3D[2, :]
 normalized_depths = (depths - np.min(depths)) / (np.max(depths) - np.min(depths))
 normalized_depths = 1 - normalized_depths
 
+
 cv2.imshow(
     "Reprojected points",
     visualize_reprojection_onto_image(
@@ -211,15 +214,17 @@ rgb_image = cv2.cvtColor(init_images[-1], cv2.COLOR_BGR2RGB)
 # make the top half of the image red
 # rgb_image[: int(rgb_image.shape[0] / 2), :, :] = [255, 0, 0]
 
-colors = []
-for pt in pts_b_inliers:
-    x, y = pt[0]
-    color = rgb_image[int(y), int(x)]  # Extract color at pixel location
-    colors.append(color)
-colors = np.array(colors) / 255.0
+def get_colors_from_image(image, points):
+    colors = []
+    for pt in points:
+        x, y = pt[0]
+        color = image[int(y), int(x)]  # extract color at pixel location
+        colors.append(color)
+    colors = np.array(colors) / 255.0
+    return colors
 
 
-# 3d plot in matplotlib of pose and points
+
 fig = plt.figure(figsize=(12, 10))
 ax = fig.add_subplot(111, projection="3d")
 ax.set_xlabel("X")
@@ -228,9 +233,9 @@ ax.set_zlabel("Z")
 ax.set_title("3D World")
 
 # visualize depth of points
-ax.scatter(
+scatter = ax.scatter(
     pts3D[0],
-    pts3D[1] * 0.5,
+    pts3D[1],
     pts3D[2],
     c=normalized_depths,
     marker="o",
@@ -239,21 +244,11 @@ ax.scatter(
     alpha=1.0,
 )
 
-ax.view_init(elev=-90, azim=-90)
-# add camera pose to plot (relative_pose_estimate)
-ax.scatter(0.3, 0, 0, c="red", marker="o", s=300)
-
-# invert y axis
-# ax.invert_xaxis()
-# ax.invert_yaxis()
-# ax.invert_zaxis()
-
-# negate y axis points
-
-
+ax.view_init(elev=-90, azim=-90)  # viewpoint
+ax.scatter(0.3, 0, 0, c="red", marker="o", s=300)  # pose
 plt.show()
-import sys
 
+import sys
 sys.exit()
 
 global_pose = np.eye(4)  # 4x4 Identity matrix
