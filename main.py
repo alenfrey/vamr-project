@@ -6,19 +6,17 @@ from src.utils import *
 from src.data_loaders import ParkingDataLoader, KittiDataLoader
 from src.visualization import VOVisualizer
 from src.performance_metrics import calculate_reprojection_error
+from src.config import get_config
 
-# SIFT feature detector and FLANN matcher
+# TODO move these to config and use them from there
 sift_detector = cv2.SIFT_create(
-    nfeatures=1000, nOctaveLayers=5, contrastThreshold=0.05, edgeThreshold=15, sigma=1.6
+    nfeatures=2000, nOctaveLayers=5, contrastThreshold=0.05, edgeThreshold=15, sigma=1.6
 )
-
 matcher = cv2.FlannBasedMatcher()
-# matcher = cv2.BFMatcher()
-# visualizer = VOVisualizer()
+# TODO END
 
 # Data loader
 dataset_loader = ParkingDataLoader(init_frame_indices=[0, 2])
-# dataset_loader = KittiDataLoader(init_frame_indices=[0, 2])
 
 # Helper function to extract keypoints
 extract_keypoints = lambda kpts1, kpts2, matches: (
@@ -26,86 +24,84 @@ extract_keypoints = lambda kpts1, kpts2, matches: (
     np.float32([kpts2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2),
 )
 
-pose_a_actual = np.array(
-    [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ]
-)
-
-pose_b_actual = np.array(
-    [
-        [1.0, 0.0, 0.0, 0.3],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ]
-)
-sharpening_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-sharpen_image = lambda img: cv2.filter2D(img, -1, sharpening_kernel)
-
+K = dataset_loader.load_camera_intrinsics()
+init_images, init_poses, init_indices = zip(*dataset_loader.get_initialization_data())
+pose_a_actual, pose_b_actual = init_poses[0], init_poses[-1]
 relative_pose_ground_truth = np.linalg.inv(pose_a_actual) @ pose_b_actual
 print(f"relative_pose_ground_truth:\n{relative_pose_ground_truth}")
+print(f"intrinsics:\n{K}")
 
-# Load camera intrinsics and initialization images
-camera_intrinsics = dataset_loader.load_camera_intrinsics()
-initialization_images = dataset_loader.get_initialization_frames()
-# initialization_images = [sharpen_image(img) for img in initialization_images]
-print(f"intrinsics:\n{camera_intrinsics}")
 
-keypoints_a, descriptors_a = sift_detector.detectAndCompute(
-    initialization_images[0], None
+def detect_and_match_features(detector, matcher, img_a, img_b):
+    """Detects and matches features between two images"""
+
+    def extract_keypoints(kpts1, kpts2, matches):
+        """Extracts the point coordinates from matched keypoints.
+        (ugly as hell, due to opencv c++ and py mismatch)"""
+        pts1 = np.float32([kpts1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
+        pts2 = np.float32([kpts2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+        return pts1, pts2
+
+    def generate_match_image(img_a, img_b, keypoints_a, keypoints_b, good_matches):
+        """Generates an image showing the matches between two images"""
+        match_img = cv2.drawMatches(
+            img_a,
+            keypoints_a,
+            img_b,
+            keypoints_b,
+            good_matches,
+            None,
+            flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
+        )
+        return match_img
+
+    keypoints_a, descriptors_a = detector.detectAndCompute(img_a, None)
+    keypoints_b, descriptors_b = detector.detectAndCompute(img_b, None)
+    # TODO: add k and distance to config and use it here
+    matches = matcher.knnMatch(descriptors_a, descriptors_b, k=2)
+    good_matches = [m for m, n in matches if m.distance < 0.8 * n.distance]
+    print(f"Number of good matches: {len(good_matches)}")
+    match_img = generate_match_image(
+        init_images[0], init_images[-1], keypoints_a, keypoints_b, good_matches
+    )
+    cv2.imshow("Matching", match_img)
+    cv2.waitKey(0)
+
+    keypoints_a, keypoints_b = extract_keypoints(keypoints_a, keypoints_b, good_matches)
+    return keypoints_a, keypoints_b, good_matches
+
+
+keypoints_a, keypoints_b, good_matches = detect_and_match_features(
+    sift_detector, matcher, init_images[0], init_images[-1]
 )
-keypoints_b, descriptors_b = sift_detector.detectAndCompute(
-    initialization_images[-1], None
-)
 
-matches = matcher.knnMatch(descriptors_a, descriptors_b, k=2)
-good_matches = [m for m, n in matches if m.distance < 0.8 * n.distance]
-print(f"Number of good matches: {len(good_matches)}")
-
-match_img = cv2.drawMatches(
-    initialization_images[0],
-    keypoints_a,
-    initialization_images[-1],
-    keypoints_b,
-    good_matches,
-    None,
-    flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
-)
-cv2.imshow("Matching", match_img)
+lines_img = draw_lines_onto_image(init_images[-1], keypoints_a, keypoints_b)
+cv2.imshow("Lines", lines_img)
 cv2.waitKey(0)
-cv2.destroyAllWindows()
-
-pts_a, pts_b = extract_keypoints(keypoints_a, keypoints_b, good_matches)
 
 # compute essential matrix
 E, inlier_mask = cv2.findEssentialMat(
-    pts_b,
-    pts_a,
-    camera_intrinsics,
+    keypoints_a,
+    keypoints_b,
+    K,
     method=cv2.RANSAC,
     prob=0.999,
     threshold=1.0,
 )
 
-# TODO: get inlier matches
-pts_a_inliers = pts_a[inlier_mask.ravel() == 1]
-pts_b_inliers = pts_b[inlier_mask.ravel() == 1]
+pts_a_inliers = keypoints_a[inlier_mask.ravel() == 1]
+pts_b_inliers = keypoints_b[inlier_mask.ravel() == 1]
 print(f"Number of inlier matches: {len(pts_a_inliers)}")
-print(f"Number of outlier matches: {len(pts_a) - len(pts_a_inliers)}")
+print(f"Number of outlier matches: {len(keypoints_a) - len(pts_a_inliers)}")
 
-# (pts_a_inliers, pts_b_inliers) = (pts_b_inliers, pts_a_inliers)
-# ! -> flipped pts_a and pts_b to flip coordinate system convention ?
-_, R, t, mask = cv2.recoverPose(E, pts_a_inliers, pts_b_inliers, camera_intrinsics)
+_, R, t, mask = cv2.recoverPose(E, pts_a_inliers, pts_b_inliers, K)
 
-R = np.linalg.inv(R)
-t = -R @ t
+# R = np.linalg.inv(R)
+# t = -R @ t
 
 # account for scale ambiguity using ground truth of initialization frames..
 t = t * 0.3
+
 relative_pose_estimate = construct_homogeneous_matrix(R, t)
 print(f"relative_pose_estimate:\n{relative_pose_estimate}")
 print(f"relative_pose_ground_truth:\n{relative_pose_ground_truth}")
@@ -116,9 +112,7 @@ P0 = np.hstack((np.eye(3), np.zeros((3, 1))))  # Projection matrix for the first
 P1 = relative_pose_estimate[:3]  # Projection matrix for the second camera
 
 # Triangulate points
-pts4D = cv2.triangulatePoints(
-    camera_intrinsics @ P0, camera_intrinsics @ P1, pts_a_inliers, pts_b_inliers
-)
+pts4D = cv2.triangulatePoints(K @ P0, K @ P1, pts_a_inliers, pts_b_inliers)
 
 # Convert from homogeneous to 3D coordinates
 pts3D = pts4D[:3] / pts4D[3]
@@ -128,7 +122,7 @@ reprojected_pts, _ = cv2.projectPoints(
     pts3D.T,
     relative_pose_estimate[:3, :3],
     relative_pose_estimate[:3, 3:4],
-    camera_intrinsics,
+    K,
     None,
 )
 
@@ -152,7 +146,7 @@ def visualize_reprojection_onto_image(img, reprojected_pts, actual_pts, depths):
     reprojected_pts = reprojected_pts.reshape(-1, 1, 2)
     reprojected_img = img.copy()
 
-    grayscale_values = (normalized_depths * 255).astype(np.uint8)
+    grayscale_values = (depths * 255).astype(np.uint8)
     colormap = np.stack(
         [grayscale_values] * 3, axis=-1
     )  # Replicate for 3 channels (BGR)
@@ -180,7 +174,7 @@ normalized_depths = 1 - normalized_depths
 cv2.imshow(
     "Reprojected points",
     visualize_reprojection_onto_image(
-        initialization_images[-1], reprojected_pts, pts_b_inliers, normalized_depths
+        init_images[-1], reprojected_pts, pts_b_inliers, normalized_depths
     ),
 )
 cv2.waitKey(0)
@@ -190,7 +184,7 @@ transformed_points_3D = (
     relative_pose_estimate[:3, :3] @ pts3D
 ) + relative_pose_estimate[:3, 3:4]
 
-rgb_image = cv2.cvtColor(initialization_images[-1], cv2.COLOR_BGR2RGB)
+rgb_image = cv2.cvtColor(init_images[-1], cv2.COLOR_BGR2RGB)
 # make the top half of the image red
 # rgb_image[: int(rgb_image.shape[0] / 2), :, :] = [255, 0, 0]
 
@@ -209,12 +203,17 @@ ax.set_xlabel("X")
 ax.set_ylabel("Y")
 ax.set_zlabel("Z")
 ax.set_title("3D World")
-# generate test points to verify correct visualization
-# ax.scatter(pts3D[0], pts3D[1], pts3D[2], c=colors, marker="o", s=12)
 
 # visualize depth of points
 ax.scatter(
-    pts3D[0], pts3D[1], pts3D[2], c=normalized_depths, marker="o", s=12, cmap="gray"
+    pts3D[0],
+    pts3D[1] * 0.5,
+    pts3D[2],
+    c=normalized_depths,
+    marker="o",
+    s=12,
+    cmap="gray",
+    alpha=1.0,
 )
 
 ax.view_init(elev=-90, azim=-90)
@@ -237,7 +236,7 @@ sys.exit()
 global_pose = np.eye(4)  # 4x4 Identity matrix
 P0 = np.hstack((np.eye(3), np.zeros((3, 1))))  # Projection matrix for the first camera
 
-prev_image = initialization_images[-1]
+prev_image = init_images[-1]
 prev_keypoints, prev_descriptors = sift_detector.detectAndCompute(prev_image, None)
 for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loader):
     print(f"Processing frame {image_index}...")
@@ -252,7 +251,7 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
     E, inlier_mask = cv2.findEssentialMat(
         pts_curr,
         pts_prev,
-        camera_intrinsics,
+        K,
         method=cv2.RANSAC,
         prob=0.999,
         threshold=1.0,
@@ -265,7 +264,7 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
         prev_keypoints, curr_keypoints, inlier_matches
     )
 
-    _, R, t, _ = cv2.recoverPose(E, pts_curr, pts_prev, camera_intrinsics)
+    _, R, t, _ = cv2.recoverPose(E, pts_curr, pts_prev, K)
     R = np.linalg.inv(R)
     t = -R @ t
 
@@ -275,8 +274,8 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
     # Update the projection matrix for the new pose and triangulate new points
     P1 = global_pose[:3]  # New projection matrix
     new_pts4D = cv2.triangulatePoints(
-        camera_intrinsics @ P0,
-        camera_intrinsics @ P1,
+        K @ P0,
+        K @ P1,
         pts_prev_inliers,
         pts_curr_inliers,
     )
@@ -286,7 +285,7 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
 
     # Reproject new_pts3D onto the image
     reprojected_pts, _ = cv2.projectPoints(
-        new_pts3D.T, global_pose[:3, :3], global_pose[:3, 3:4], camera_intrinsics, None
+        new_pts3D.T, global_pose[:3, :3], global_pose[:3, 3:4], K, None
     )
     # Calculate reprojection error
 

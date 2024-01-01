@@ -7,6 +7,7 @@ from constants import *
 import numpy as np
 import cv2
 
+# TODO Add option to scale images and K by a factor given as an argument
 
 class VODataLoader:
     def __init__(self, dataset_path, init_frame_indices=None):
@@ -25,12 +26,15 @@ class VODataLoader:
     def load_poses(self):
         pass
 
-    def get_initialization_frames(self):
+    def get_initialization_data(self):
         print(f"Total images available: {len(self.image_paths)}")  # Debugging line
         print(f"Initialization indices: {self.init_frame_indices}")  # Debugging line
-        return [
-            self.load_image(self.image_paths[idx]) for idx in self.init_frame_indices
-        ]
+        init_data = []
+        for idx in self.init_frame_indices:
+            image = self.load_image(self.image_paths[idx])
+            pose = self.poses[idx] if self.poses is not None else None
+            init_data.append((image, pose, idx))
+        return init_data
 
     def __iter__(self):
         # start iterating from the frame immediately after the last initialization frame
