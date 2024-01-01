@@ -9,13 +9,16 @@ from src.performance_metrics import calculate_reprojection_error
 
 # SIFT feature detector and FLANN matcher
 sift_detector = cv2.SIFT_create(
-    nOctaveLayers=3, contrastThreshold=0.02, edgeThreshold=50, sigma=1.6
+    nfeatures=1000, nOctaveLayers=5, contrastThreshold=0.05, edgeThreshold=15, sigma=1.6
 )
-flann_matcher = cv2.FlannBasedMatcher()
+
+matcher = cv2.FlannBasedMatcher()
+# matcher = cv2.BFMatcher()
 # visualizer = VOVisualizer()
 
 # Data loader
 dataset_loader = ParkingDataLoader(init_frame_indices=[0, 2])
+# dataset_loader = KittiDataLoader(init_frame_indices=[0, 2])
 
 # Helper function to extract keypoints
 extract_keypoints = lambda kpts1, kpts2, matches: (
@@ -49,7 +52,7 @@ print(f"relative_pose_ground_truth:\n{relative_pose_ground_truth}")
 # Load camera intrinsics and initialization images
 camera_intrinsics = dataset_loader.load_camera_intrinsics()
 initialization_images = dataset_loader.get_initialization_frames()
-initialization_images = [sharpen_image(img) for img in initialization_images]
+# initialization_images = [sharpen_image(img) for img in initialization_images]
 print(f"intrinsics:\n{camera_intrinsics}")
 
 keypoints_a, descriptors_a = sift_detector.detectAndCompute(
@@ -59,7 +62,7 @@ keypoints_b, descriptors_b = sift_detector.detectAndCompute(
     initialization_images[-1], None
 )
 
-matches = flann_matcher.knnMatch(descriptors_a, descriptors_b, k=2)
+matches = matcher.knnMatch(descriptors_a, descriptors_b, k=2)
 good_matches = [m for m, n in matches if m.distance < 0.8 * n.distance]
 print(f"Number of good matches: {len(good_matches)}")
 
@@ -138,29 +141,46 @@ print("mean error:", np.mean(errors))
 print("std error:", np.std(errors))
 print("median error:", np.median(errors))
 
+print(f"3d points median of x axis: {np.median(pts3D[0, :])}")
+print(f"3d points median of y axis: {np.median(pts3D[1, :])}")
+print(f"3d points median of z axis: {np.median(pts3D[2, :])}")
 
-def visualize_reprojection_onto_image(img, reprojected_pts, actual_pts):
+
+def visualize_reprojection_onto_image(img, reprojected_pts, actual_pts, depths):
     reprojected_pts = reprojected_pts.reshape(-1, 2)
     reprojected_pts = reprojected_pts.astype(np.int32)
     reprojected_pts = reprojected_pts.reshape(-1, 1, 2)
     reprojected_img = img.copy()
+
+    grayscale_values = (normalized_depths * 255).astype(np.uint8)
+    colormap = np.stack(
+        [grayscale_values] * 3, axis=-1
+    )  # Replicate for 3 channels (BGR)
+
     for pt in reprojected_pts:
-        cv2.circle(reprojected_img, tuple(pt[0]), 4, (255, 255, 255), -1)
+        cv2.circle(reprojected_img, tuple(pt[0]), 5, (255, 255, 255), -1)
         cv2.circle(
-            reprojected_img, tuple(pt[0]), 5, (0, 0, 0), 1
+            reprojected_img, tuple(pt[0]), 6, (0, 0, 0), 1
         )  # Add outline to the circle
     # draw actual points onto the image
     actual_pts = actual_pts.astype(np.int32)
     actual_pts = actual_pts.reshape(-1, 1, 2)
-    for pt in actual_pts:
-        cv2.circle(reprojected_img, tuple(pt[0]), 2, (0, 0, 255), -1)
+    for pt, color in zip(actual_pts, colormap):
+        bgr_tuple = tuple(int(c) for c in color)  # Convert to tuple of integers
+        cv2.circle(reprojected_img, tuple(pt[0]), 2, bgr_tuple, -1)
+        # outline in negative color
+        cv2.circle(reprojected_img, tuple(pt[0]), 3, (0, 0, 0), 1)
     return reprojected_img
 
+
+depths = pts3D[2, :]
+normalized_depths = (depths - np.min(depths)) / (np.max(depths) - np.min(depths))
+normalized_depths = 1 - normalized_depths
 
 cv2.imshow(
     "Reprojected points",
     visualize_reprojection_onto_image(
-        initialization_images[-1], reprojected_pts, pts_b_inliers
+        initialization_images[-1], reprojected_pts, pts_b_inliers, normalized_depths
     ),
 )
 cv2.waitKey(0)
@@ -181,8 +201,6 @@ for pt in pts_b_inliers:
     colors.append(color)
 colors = np.array(colors) / 255.0
 
-depths = pts3D[2, :]
-
 
 # 3d plot in matplotlib of pose and points
 fig = plt.figure(figsize=(12, 10))
@@ -195,15 +213,21 @@ ax.set_title("3D World")
 # ax.scatter(pts3D[0], pts3D[1], pts3D[2], c=colors, marker="o", s=12)
 
 # visualize depth of points
-ax.scatter(pts3D[0], pts3D[1], pts3D[2], c=depths, marker="o", s=12, cmap="gray")
+ax.scatter(
+    pts3D[0], pts3D[1], pts3D[2], c=normalized_depths, marker="o", s=12, cmap="gray"
+)
 
-ax.view_init(elev=90, azim=-90)
+ax.view_init(elev=-90, azim=-90)
 # add camera pose to plot (relative_pose_estimate)
 ax.scatter(0.3, 0, 0, c="red", marker="o", s=300)
 
 # invert y axis
-ax.invert_yaxis()
-ax.invert_zaxis()
+# ax.invert_xaxis()
+# ax.invert_yaxis()
+# ax.invert_zaxis()
+
+# negate y axis points
+
 
 plt.show()
 import sys
@@ -219,7 +243,7 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
     print(f"Processing frame {image_index}...")
 
     curr_keypoints, curr_descriptors = sift_detector.detectAndCompute(curr_image, None)
-    matches = flann_matcher.knnMatch(prev_descriptors, curr_descriptors, k=2)
+    matches = matcher.knnMatch(prev_descriptors, curr_descriptors, k=2)
 
     good_matches = [m for m, n in matches if m.distance < 0.5 * n.distance]
     number_of_good_matches = len(good_matches)
