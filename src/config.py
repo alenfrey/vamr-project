@@ -7,22 +7,26 @@ default_config = {
     "ransac": {"prob": 0.99, "threshold": 1.0},
 }
 
+sift_detector = cv2.SIFT_create(
+    nfeatures=2000, nOctaveLayers=5, contrastThreshold=0.05, edgeThreshold=15, sigma=1.6
+)
+
 # Specific configurations for datasets
 config = {
     "parking": {
         "common": {"matcher": cv2.BFMatcher()},
         "initialization": {
-            "sift": cv2.SIFT_create(
+            "detector": cv2.SIFT_create(
                 nfeatures=2000,
                 nOctaveLayers=5,
                 contrastThreshold=0.05,
                 edgeThreshold=15,
                 sigma=1.6,
             ),
-            "ransac": {"prob": 0.999, "threshold": 1.0},
+            "ransac": {"prob": 0.999, "threshold": 2.0},
         },
         "continuous": {
-            "sift": cv2.SIFT_create(
+            "detector": cv2.SIFT_create(
                 nfeatures=1000,
                 nOctaveLayers=3,
                 contrastThreshold=0.04,
@@ -32,7 +36,7 @@ config = {
             "ransac": {"prob": 0.995, "threshold": 0.5},
         },
     },
-    # add other dataset configurations as needed
+    # add other dataset configurations as needed (e.g. "kitti", "malaga", etc.)
 }
 
 
@@ -46,6 +50,7 @@ def get_config(dataset_name, mode):
     final_config = {**default_config, **common_config, **mode_config}
     return final_config
 
+
 # example usage
 
 # from config import get_config
@@ -58,7 +63,7 @@ def get_config(dataset_name, mode):
 # current_config = get_config(dataset_name, mode)
 
 # # Extract specific configurations
-# sift_detector = current_config['sift']
+# sift_detector = current_config['detector']
 # matcher = current_config['matcher']
 # ransac_params = current_config['ransac']
 

@@ -8,16 +8,9 @@ from src.visualization import VOVisualizer
 from src.performance_metrics import calculate_reprojection_error
 from src.config import get_config
 
-# TODO move these to config and use them from there
-sift_detector = cv2.SIFT_create(
-    nfeatures=2000, nOctaveLayers=5, contrastThreshold=0.05, edgeThreshold=15, sigma=1.6
-)
-matcher = cv2.FlannBasedMatcher()
-# TODO END
 
-# Data loader
+init_config = get_config("parking", "initialization")
 dataset_loader = ParkingDataLoader(init_frame_indices=[0, 2])
-
 K = dataset_loader.load_camera_intrinsics()
 init_images, init_poses, init_indices = zip(*dataset_loader.get_initialization_data())
 pose_a_actual, pose_b_actual = init_poses[0], init_poses[-1]
@@ -66,7 +59,7 @@ def detect_and_match_features(detector, matcher, img_a, img_b):
 
 
 keypoints_a, keypoints_b, good_matches = detect_and_match_features(
-    sift_detector, matcher, init_images[0], init_images[-1]
+    init_config["detector"], init_config["matcher"], init_images[0], init_images[-1]
 )
 
 lines_img = draw_lines_onto_image(init_images[-1], keypoints_a, keypoints_b)
@@ -74,15 +67,15 @@ cv2.imshow("Lines", lines_img)
 cv2.waitKey(0)
 
 
-def estimate_pose(keypoints_a, keypoints_b, K):
+def estimate_pose(keypoints_a, keypoints_b, K, prob=0.999, threshold=1.0):
     """Estimates the pose between two images using RANSAC"""
     E, inlier_mask = cv2.findEssentialMat(
         keypoints_a,
         keypoints_b,
         K,
         method=cv2.RANSAC,
-        prob=0.999,
-        threshold=1.0,
+        prob=prob,
+        threshold=threshold,
     )
 
     # filter points based on the inlier mask
@@ -108,7 +101,9 @@ def estimate_pose(keypoints_a, keypoints_b, K):
     return R, t, pts_a_inliers_refined, pts_b_inliers_refined
 
 
-R, t, pts_a_inliers, pts_b_inliers = estimate_pose(keypoints_a, keypoints_b, K)
+R, t, pts_a_inliers, pts_b_inliers = estimate_pose(
+    keypoints_a, keypoints_b, K, **init_config["ransac"]
+)
 print(f"R:\n{R}")
 print(f"t:\n{t}")
 
@@ -140,7 +135,6 @@ def triangulate_points(pts_a, pts_b, K, relative_pose):
 pts3D, pts4D = triangulate_points(
     pts_a_inliers, pts_b_inliers, K, relative_pose_estimate
 )
-
 
 
 # Reproject points onto the image
@@ -192,10 +186,16 @@ def visualize_reprojection_onto_image(img, reprojected_pts, actual_pts, depths):
     return reprojected_img
 
 
-depths = pts3D[2, :]
-normalized_depths = (depths - np.min(depths)) / (np.max(depths) - np.min(depths))
-normalized_depths = 1 - normalized_depths
+# refine pose using PnP
 
+
+def get_normalized_depths(pts3D):
+    depths = pts3D[2, :]
+    normalized_depths = (depths - np.min(depths)) / (np.max(depths) - np.min(depths))
+    normalized_depths = 1 - normalized_depths
+    return normalized_depths
+
+normalized_depths = get_normalized_depths(pts3D)
 
 cv2.imshow(
     "Reprojected points",
@@ -214,6 +214,7 @@ rgb_image = cv2.cvtColor(init_images[-1], cv2.COLOR_BGR2RGB)
 # make the top half of the image red
 # rgb_image[: int(rgb_image.shape[0] / 2), :, :] = [255, 0, 0]
 
+
 def get_colors_from_image(image, points):
     colors = []
     for pt in points:
@@ -222,7 +223,6 @@ def get_colors_from_image(image, points):
         colors.append(color)
     colors = np.array(colors) / 255.0
     return colors
-
 
 
 fig = plt.figure(figsize=(12, 10))
@@ -249,22 +249,30 @@ ax.scatter(0.3, 0, 0, c="red", marker="o", s=300)  # pose
 plt.show()
 
 import sys
+
 sys.exit()
 
-global_pose = np.eye(4)  # 4x4 Identity matrix
-P0 = np.hstack((np.eye(3), np.zeros((3, 1))))  # Projection matrix for the first camera
+# -<------------------->- Continuous Operation -<------------------->- #
 
+cont_config = get_config("parking", "continuous")
+
+# global_pose = np.eye(4)  # 4x4 Identity matrix
+# P0 = np.hstack((np.eye(3), np.zeros((3, 1))))  # Projection matrix for the first camera
 prev_image = init_images[-1]
+
 prev_keypoints, prev_descriptors = sift_detector.detectAndCompute(prev_image, None)
 for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loader):
     print(f"Processing frame {image_index}...")
 
+        
     curr_keypoints, curr_descriptors = sift_detector.detectAndCompute(curr_image, None)
     matches = matcher.knnMatch(prev_descriptors, curr_descriptors, k=2)
 
     good_matches = [m for m, n in matches if m.distance < 0.5 * n.distance]
     number_of_good_matches = len(good_matches)
     pts_prev, pts_curr = extract_keypoints(prev_keypoints, curr_keypoints, good_matches)
+    
+    
 
     E, inlier_mask = cv2.findEssentialMat(
         pts_curr,
