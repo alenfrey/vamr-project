@@ -18,12 +18,6 @@ matcher = cv2.FlannBasedMatcher()
 # Data loader
 dataset_loader = ParkingDataLoader(init_frame_indices=[0, 2])
 
-# Helper function to extract keypoints
-extract_keypoints = lambda kpts1, kpts2, matches: (
-    np.float32([kpts1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2),
-    np.float32([kpts2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2),
-)
-
 K = dataset_loader.load_camera_intrinsics()
 init_images, init_poses, init_indices = zip(*dataset_loader.get_initialization_data())
 pose_a_actual, pose_b_actual = init_poses[0], init_poses[-1]
@@ -79,43 +73,73 @@ lines_img = draw_lines_onto_image(init_images[-1], keypoints_a, keypoints_b)
 cv2.imshow("Lines", lines_img)
 cv2.waitKey(0)
 
-# compute essential matrix
-E, inlier_mask = cv2.findEssentialMat(
-    keypoints_a,
-    keypoints_b,
-    K,
-    method=cv2.RANSAC,
-    prob=0.999,
-    threshold=1.0,
-)
 
-pts_a_inliers = keypoints_a[inlier_mask.ravel() == 1]
-pts_b_inliers = keypoints_b[inlier_mask.ravel() == 1]
-print(f"Number of inlier matches: {len(pts_a_inliers)}")
-print(f"Number of outlier matches: {len(keypoints_a) - len(pts_a_inliers)}")
+def estimate_pose(keypoints_a, keypoints_b, K):
+    """Estimates the pose between two images using RANSAC"""
+    E, inlier_mask = cv2.findEssentialMat(
+        keypoints_a,
+        keypoints_b,
+        K,
+        method=cv2.RANSAC,
+        prob=0.999,
+        threshold=1.0,
+    )
 
-_, R, t, mask = cv2.recoverPose(E, pts_a_inliers, pts_b_inliers, K)
+    # filter points based on the inlier mask
+    pts_a_inliers = keypoints_a[inlier_mask.ravel() == 1]
+    pts_b_inliers = keypoints_b[inlier_mask.ravel() == 1]
 
+    print(f"Initial number of inlier matches: {len(pts_a_inliers)}")
+    print(f"Initial number of outlier matches: {len(keypoints_a) - len(pts_a_inliers)}")
+
+    # recover camera pose and refine inliers
+    _, R, t, pose_mask = cv2.recoverPose(E, pts_a_inliers, pts_b_inliers, K)
+
+    pose_mask = (pose_mask > 0).astype(int)
+    # Further filter points based on the pose mask
+    pts_a_inliers_refined = pts_a_inliers[pose_mask.ravel() == 1]
+    pts_b_inliers_refined = pts_b_inliers[pose_mask.ravel() == 1]
+
+    print(f"refined number of inlier matches: {len(pts_a_inliers_refined)}")
+    print(
+        f"refined number of outlier matches: {len(keypoints_a) - len(pts_a_inliers_refined)}"
+    )
+
+    return R, t, pts_a_inliers_refined, pts_b_inliers_refined
+
+
+R, t, pts_a_inliers, pts_b_inliers = estimate_pose(keypoints_a, keypoints_b, K)
+print(f"R:\n{R}")
+print(f"t:\n{t}")
+
+t = t * 0.3  # account for scale ambiguity using ground truth of initialization frames..
 # R = np.linalg.inv(R)
 # t = -R @ t
-
-# account for scale ambiguity using ground truth of initialization frames..
-t = t * 0.3
 
 relative_pose_estimate = construct_homogeneous_matrix(R, t)
 print(f"relative_pose_estimate:\n{relative_pose_estimate}")
 print(f"relative_pose_ground_truth:\n{relative_pose_ground_truth}")
 print(compare_poses(relative_pose_ground_truth, relative_pose_estimate))
 
-# TRIANGULATION
-P0 = np.hstack((np.eye(3), np.zeros((3, 1))))  # Projection matrix for the first camera
-P1 = relative_pose_estimate[:3]  # Projection matrix for the second camera
+def triangulate_points(pts_a, pts_b, K, relative_pose):
+    """Triangulates points from two images"""
+    R = relative_pose[:3, :3]  # Rotation matrix from the relative pose
+    t = relative_pose[:3, 3:4]  # Translation vector from the relative pose
+    P0 = np.hstack(
+        (np.eye(3), np.zeros((3, 1)))
+    )  # Projection matrix for the first camera
+    P1 = np.hstack((R, t))  # Projection matrix for the second camera
+    P0 = K @ P0  # Apply the intrinsic matrix to the first camera
+    P1 = K @ P1  # Apply the intrinsic matrix to the second camera
+    pts4D = cv2.triangulatePoints(P0, P1, pts_a, pts_b)
+    pts3D = pts4D[:3] / pts4D[3]  # Convert from homogeneous to 3D coordinates
+    return pts3D, pts4D
 
-# Triangulate points
-pts4D = cv2.triangulatePoints(K @ P0, K @ P1, pts_a_inliers, pts_b_inliers)
 
-# Convert from homogeneous to 3D coordinates
-pts3D = pts4D[:3] / pts4D[3]
+pts3D, pts4D = triangulate_points(pts_a_inliers, pts_b_inliers, K, relative_pose_estimate)
+
+
+
 
 # Reproject points onto the image
 reprojected_pts, _ = cv2.projectPoints(
@@ -125,7 +149,6 @@ reprojected_pts, _ = cv2.projectPoints(
     K,
     None,
 )
-
 
 #  calculate reprojection error
 errors = calculate_reprojection_error(pts_b_inliers, reprojected_pts)
