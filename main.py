@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 
 from src.utils import *
 from src.data_loaders import ParkingDataLoader, KittiDataLoader
-from src.visualization import VOVisualizer
+from src.visualization import VOsualizer
 from src.performance_metrics import calculate_reprojection_error
 from src.config import get_config
-
+from collections import namedtuple
 
 init_config = get_config("parking", "initialization")
 dataset_loader = ParkingDataLoader(init_frame_indices=[0, 2])
@@ -19,8 +19,24 @@ print(f"relative_pose_ground_truth:\n{relative_pose_ground_truth}")
 print(f"intrinsics:\n{K}")
 
 
-def detect_and_match_features(detector, matcher, img_a, img_b):
+# nameduple for storing detection results
+Features = namedtuple("DetectionResults", ["keypoints", "descriptors"])
+
+
+def detect_features(detector, img):
+    """Detects features in an image"""
+    keypoints, descriptors = detector.detectAndCompute(img, None)
+    return Features(keypoints, descriptors)
+
+
+features_a = detect_features(init_config["detector"], init_images[0])
+features_b = detect_features(init_config["detector"], init_images[-1])
+
+
+def match_features(matcher, features_a, features_b, lowe_ratio=0.8):
     """Detects and matches features between two images"""
+    keypoints_a, descriptors_a = features_a
+    keypoints_b, descriptors_b = features_b
 
     def extract_keypoints(kpts1, kpts2, matches):
         """Extracts the point coordinates from matched keypoints.
@@ -29,38 +45,80 @@ def detect_and_match_features(detector, matcher, img_a, img_b):
         pts2 = np.float32([kpts2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
         return pts1, pts2
 
-    def generate_match_image(img_a, img_b, keypoints_a, keypoints_b, good_matches):
-        """Generates an image showing the matches between two images"""
-        match_img = cv2.drawMatches(
-            img_a,
-            keypoints_a,
-            img_b,
-            keypoints_b,
-            good_matches,
-            None,
-            flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
-        )
-        return match_img
-
-    keypoints_a, descriptors_a = detector.detectAndCompute(img_a, None)
-    keypoints_b, descriptors_b = detector.detectAndCompute(img_b, None)
     # TODO: add k and distance to config and use it here
     matches = matcher.knnMatch(descriptors_a, descriptors_b, k=2)
-    good_matches = [m for m, n in matches if m.distance < 0.8 * n.distance]
+    good_matches = [m for m, n in matches if m.distance < lowe_ratio * n.distance]
     print(f"Number of good matches: {len(good_matches)}")
-    match_img = generate_match_image(
-        init_images[0], init_images[-1], keypoints_a, keypoints_b, good_matches
-    )
-    cv2.imshow("Matching", match_img)
-    cv2.waitKey(0)
-
     keypoints_a, keypoints_b = extract_keypoints(keypoints_a, keypoints_b, good_matches)
     return keypoints_a, keypoints_b, good_matches
 
 
-keypoints_a, keypoints_b, good_matches = detect_and_match_features(
-    init_config["detector"], init_config["matcher"], init_images[0], init_images[-1]
+def match_features(matcher, features_a, features_b, lowe_ratio=0.8, max_distance=30):
+    """Detects and matches features between two images with cross-check and distance constraint"""
+    keypoints_a, descriptors_a = features_a
+    keypoints_b, descriptors_b = features_b
+
+    def cross_check_matches(matches_ab, matches_ba):
+        """Performs a cross-check between matches."""
+        mutual_matches = []
+        for match_ab in matches_ab:
+            if matches_ba[match_ab.trainIdx].trainIdx == match_ab.queryIdx:
+                mutual_matches.append(match_ab)
+        return mutual_matches
+
+    # Forward matching
+    matches_ab = matcher.knnMatch(descriptors_a, descriptors_b, k=2)
+    matches_ab = [m for m, n in matches_ab if m.distance < lowe_ratio * n.distance]
+
+    # Reverse matching
+    matches_ba = matcher.knnMatch(descriptors_b, descriptors_a, k=1)
+    matches_ba = [m[0] for m in matches_ba]
+
+    # Cross-check
+    good_matches = cross_check_matches(matches_ab, matches_ba)
+
+    # Apply geometric constraints
+    filtered_matches = []
+    for m in good_matches:
+        pt_a = keypoints_a[m.queryIdx].pt
+        pt_b = keypoints_b[m.trainIdx].pt
+        distance = np.linalg.norm(np.array(pt_a) - np.array(pt_b))
+        if distance <= max_distance:
+            filtered_matches.append(m)
+
+    print(f"Number of good matches after cross-check and distance filtering: {len(filtered_matches)}")
+
+    # Extracting the point coordinates
+    pts_a = np.float32([keypoints_a[m.queryIdx].pt for m in filtered_matches]).reshape(-1, 1, 2)
+    pts_b = np.float32([keypoints_b[m.trainIdx].pt for m in filtered_matches]).reshape(-1, 1, 2)
+
+    return pts_a, pts_b, filtered_matches
+
+
+def generate_match_image(img_a, img_b, keypoints_a, keypoints_b, good_matches):
+    """Generates an image showing the matches between two images"""
+    match_img = cv2.drawMatches(
+        img_a,
+        features_a.keypoints,
+        img_b,
+        features_b.keypoints,
+        good_matches,
+        None,
+        flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
+    )
+    return match_img
+
+
+keypoints_a, keypoints_b, good_matches = match_features(
+    init_config["matcher"], features_a, features_b, init_config["lowe_ratio"], max_distance=init_config["match_max_dist"]
 )
+
+match_img = generate_match_image(
+    init_images[0], init_images[-1], keypoints_a, keypoints_b, good_matches
+)
+
+cv2.imshow("Matching", match_img)
+cv2.waitKey(0)
 
 lines_img = draw_lines_onto_image(init_images[-1], keypoints_a, keypoints_b)
 cv2.imshow("Lines", lines_img)
@@ -195,6 +253,7 @@ def get_normalized_depths(pts3D):
     normalized_depths = 1 - normalized_depths
     return normalized_depths
 
+
 normalized_depths = get_normalized_depths(pts3D)
 
 cv2.imshow(
@@ -214,16 +273,7 @@ rgb_image = cv2.cvtColor(init_images[-1], cv2.COLOR_BGR2RGB)
 # make the top half of the image red
 # rgb_image[: int(rgb_image.shape[0] / 2), :, :] = [255, 0, 0]
 
-
-def get_colors_from_image(image, points):
-    colors = []
-    for pt in points:
-        x, y = pt[0]
-        color = image[int(y), int(x)]  # extract color at pixel location
-        colors.append(color)
-    colors = np.array(colors) / 255.0
-    return colors
-
+colors = get_colors_from_image(rgb_image, pts_b_inliers)
 
 fig = plt.figure(figsize=(12, 10))
 ax = fig.add_subplot(111, projection="3d")
@@ -248,94 +298,53 @@ ax.view_init(elev=-90, azim=-90)  # viewpoint
 ax.scatter(0.3, 0, 0, c="red", marker="o", s=300)  # pose
 plt.show()
 
-import sys
-
-sys.exit()
+# import sys
+# sys.exit()
 
 # -<------------------->- Continuous Operation -<------------------->- #
 
+# setup
 cont_config = get_config("parking", "continuous")
+visualizer = VOsualizer()
+world_pose = np.linalg.inv(relative_pose_estimate)
+print(f"world_pose:\n{world_pose}")
 
-# global_pose = np.eye(4)  # 4x4 Identity matrix
-# P0 = np.hstack((np.eye(3), np.zeros((3, 1))))  # Projection matrix for the first camera
-prev_image = init_images[-1]
-
-prev_keypoints, prev_descriptors = sift_detector.detectAndCompute(prev_image, None)
+features_a = features_b
 for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loader):
     print(f"Processing frame {image_index}...")
+    # detect features
+    features_b = detect_features(cont_config["detector"], curr_image)
+    # match features
 
-        
-    curr_keypoints, curr_descriptors = sift_detector.detectAndCompute(curr_image, None)
-    matches = matcher.knnMatch(prev_descriptors, curr_descriptors, k=2)
-
-    good_matches = [m for m, n in matches if m.distance < 0.5 * n.distance]
-    number_of_good_matches = len(good_matches)
-    pts_prev, pts_curr = extract_keypoints(prev_keypoints, curr_keypoints, good_matches)
-    
-    
-
-    E, inlier_mask = cv2.findEssentialMat(
-        pts_curr,
-        pts_prev,
-        K,
-        method=cv2.RANSAC,
-        prob=0.999,
-        threshold=1.0,
+    # Detect and match features
+    keypoints_a, keypoints_b, good_matches = match_features(
+        cont_config["matcher"], features_a, features_b, cont_config["lowe_ratio"], max_distance=cont_config["match_max_dist"]
     )
 
-    inlier_matches = [
-        good_matches[i] for i in range(len(good_matches)) if inlier_mask[i, 0]
-    ]
-    pts_prev_inliers, pts_curr_inliers = extract_keypoints(
-        prev_keypoints, curr_keypoints, inlier_matches
+    # Estimate pose
+    R, t, pts_a_inliers, pts_b_inliers = estimate_pose(
+        keypoints_a, keypoints_b, K, **cont_config["ransac"]
     )
-
-    _, R, t, _ = cv2.recoverPose(E, pts_curr, pts_prev, K)
-    R = np.linalg.inv(R)
-    t = -R @ t
 
     relative_pose = construct_homogeneous_matrix(R, t)
-    global_pose = global_pose @ relative_pose
+    print(f"relative_pose:\n{relative_pose}")
+    world_pose = world_pose @ np.linalg.inv(relative_pose)
+    print(f"global_pose:\n{world_pose}")
 
-    # Update the projection matrix for the new pose and triangulate new points
-    P1 = global_pose[:3]  # New projection matrix
-    new_pts4D = cv2.triangulatePoints(
-        K @ P0,
-        K @ P1,
-        pts_prev_inliers,
-        pts_curr_inliers,
-    )
-    new_pts3D = (
-        new_pts4D[:3] / new_pts4D[3]
-    )  # Convert from homogeneous to 3D coordinates
-
-    # Reproject new_pts3D onto the image
-    reprojected_pts, _ = cv2.projectPoints(
-        new_pts3D.T, global_pose[:3, :3], global_pose[:3, 3:4], K, None
-    )
-    # Calculate reprojection error
-
-    reprojection_errors = calculate_reprojection_error(
-        pts_curr_inliers, reprojected_pts
-    )
-
-    transformed_points_3D = (global_pose[:3, :3] @ new_pts3D) + global_pose[:3, 3:4]
+    # Triangulate points
+    pts3D, pts4D = triangulate_points(pts_a_inliers, pts_b_inliers, K, relative_pose)
 
     # Visualization and updates for next iteration
-    curr_image = draw_lines_onto_image(curr_image, pts_prev, pts_curr)
+    curr_image = draw_lines_onto_image(curr_image, keypoints_a, keypoints_b)
+
     visualizer.update_image(image=curr_image)
-    visualizer.update_world(pose=global_pose, points_3D=new_pts3D)
-    visualizer.update_line_chart(
-        {
-            # "# of matches": (number_of_good_matches, iteration),
-            "Mean Reprojection Error": (np.mean(reprojection_errors), iteration),
-        }
-    )
-    visualizer.update_points_plot(pts_curr, reprojected_pts)
+
+    visualizer.update_world(pose=world_pose, points_3D=pts3D)
+
     visualizer.redraw()
 
-    prev_image = curr_image.copy()
-    prev_keypoints, prev_descriptors = curr_keypoints, curr_descriptors
+    # update for next iteration
+    features_a = features_b
 
     if not plt.get_fignums():
         break

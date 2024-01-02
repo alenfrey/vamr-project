@@ -15,6 +15,16 @@ import cv2
 import numpy as np
 
 
+def get_colors_from_image(image, points):
+    colors = []
+    for pt in points:
+        x, y = pt[0]
+        color = image[int(y), int(x)]  # extract color at pixel location
+        colors.append(color)
+    colors = np.array(colors) / 255.0
+    return colors
+
+
 def ensure_grayscale(image):
     """
     Convert an image to grayscale if it is not already.

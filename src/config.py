@@ -14,7 +14,6 @@ sift_detector = cv2.SIFT_create(
 # Specific configurations for datasets
 config = {
     "parking": {
-        "common": {"matcher": cv2.BFMatcher()},
         "initialization": {
             "detector": cv2.SIFT_create(
                 nfeatures=2000,
@@ -23,17 +22,22 @@ config = {
                 edgeThreshold=15,
                 sigma=1.6,
             ),
+            "matcher": cv2.BFMatcher(),
+            "lowe_ratio": 0.7,
+            "match_max_dist": 30,
             "ransac": {"prob": 0.999, "threshold": 2.0},
         },
         "continuous": {
             "detector": cv2.SIFT_create(
-                nfeatures=1000,
                 nOctaveLayers=3,
-                contrastThreshold=0.04,
-                edgeThreshold=10,
-                sigma=1.2,
+                contrastThreshold=0.02,
+                edgeThreshold=60,
+                sigma=1.6,
             ),
-            "ransac": {"prob": 0.995, "threshold": 0.5},
+            "matcher": cv2.FlannBasedMatcher(),
+            "lowe_ratio": 0.5,
+            "match_max_dist": 50,
+            "ransac": {"prob": 0.999, "threshold": 1.0},
         },
     },
     # add other dataset configurations as needed (e.g. "kitti", "malaga", etc.)

@@ -6,7 +6,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 
 
-class VOVisualizer:
+class VOsualizer:
     def __init__(self):
         self.fig = plt.figure(figsize=(12, 10))
 
@@ -77,10 +77,16 @@ class VOVisualizer:
         self.ax_extra.set_title("2D Points and Reprojected Points")
         self.ax_extra.set_xlabel("x")
         self.ax_extra.set_ylabel("y")
-        
+
         if pts_reprojected is not None:
             points = pts_reprojected.reshape(-1, 2)
-            self.ax_extra.scatter(points[:, 0], points[:, 1], c="red", label="Reprojected Points", alpha=0.5)
+            self.ax_extra.scatter(
+                points[:, 0],
+                points[:, 1],
+                c="red",
+                label="Reprojected Points",
+                alpha=0.5,
+            )
             self.ax_extra.legend()
 
     def update_line_chart(self, new_data):
