@@ -9,6 +9,7 @@ import cv2
 
 # TODO Add option to scale images and K by a factor given as an argument
 
+
 class VODataLoader:
     def __init__(self, dataset_path, init_frame_indices=None):
         self.dataset_path = Path(dataset_path)
@@ -16,6 +17,7 @@ class VODataLoader:
         self.poses = self.load_poses()
         self.init_frame_indices = init_frame_indices or []
         self.current_image_index = 0
+        self.name = self.dataset_path.name
 
     def load_camera_intrinsics(self):
         pass
@@ -53,6 +55,9 @@ class VODataLoader:
         self.current_image_index += 1
 
         return image, pose, index
+
+    def __str__(self):
+        return self.name
 
     def load_image(self, image_path):
         pass

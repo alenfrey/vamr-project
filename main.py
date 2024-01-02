@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import pprint
 
 from src.utils import *
 from src.data_loaders import ParkingDataLoader, KittiDataLoader
@@ -9,8 +10,17 @@ from src.performance_metrics import calculate_reprojection_error
 from src.config import get_config
 from collections import namedtuple
 
-init_config = get_config("parking", "initialization")
+
 dataset_loader = ParkingDataLoader(init_frame_indices=[0, 2])
+dataset_name = str(dataset_loader)
+
+
+# -<------------------->- Initialization -<------------------->- #
+
+init_config = get_config(dataset_name=dataset_name, mode="initialization")
+pp = pprint.PrettyPrinter(indent=4)
+pp.pprint(init_config)
+
 K = dataset_loader.load_camera_intrinsics()
 init_images, init_poses, init_indices = zip(*dataset_loader.get_initialization_data())
 pose_a_actual, pose_b_actual = init_poses[0], init_poses[-1]
@@ -18,9 +28,8 @@ relative_pose_ground_truth = np.linalg.inv(pose_a_actual) @ pose_b_actual
 print(f"relative_pose_ground_truth:\n{relative_pose_ground_truth}")
 print(f"intrinsics:\n{K}")
 
-
 # nameduple for storing detection results
-Features = namedtuple("DetectionResults", ["keypoints", "descriptors"])
+Features = namedtuple("Features", ["keypoints", "descriptors"])
 
 
 def detect_features(detector, img):
@@ -86,16 +95,22 @@ def match_features(matcher, features_a, features_b, lowe_ratio=0.8, max_distance
         if distance <= max_distance:
             filtered_matches.append(m)
 
-    print(f"Number of good matches after cross-check and distance filtering: {len(filtered_matches)}")
+    print(
+        f"Number of good matches after cross-check and distance filtering: {len(filtered_matches)}"
+    )
 
     # Extracting the point coordinates
-    pts_a = np.float32([keypoints_a[m.queryIdx].pt for m in filtered_matches]).reshape(-1, 1, 2)
-    pts_b = np.float32([keypoints_b[m.trainIdx].pt for m in filtered_matches]).reshape(-1, 1, 2)
+    pts_a = np.float32([keypoints_a[m.queryIdx].pt for m in filtered_matches]).reshape(
+        -1, 1, 2
+    )
+    pts_b = np.float32([keypoints_b[m.trainIdx].pt for m in filtered_matches]).reshape(
+        -1, 1, 2
+    )
 
     return pts_a, pts_b, filtered_matches
 
 
-def generate_match_image(img_a, img_b, keypoints_a, keypoints_b, good_matches):
+def generate_match_image(img_a, img_b, features_a, features_b, good_matches):
     """Generates an image showing the matches between two images"""
     match_img = cv2.drawMatches(
         img_a,
@@ -110,11 +125,15 @@ def generate_match_image(img_a, img_b, keypoints_a, keypoints_b, good_matches):
 
 
 keypoints_a, keypoints_b, good_matches = match_features(
-    init_config["matcher"], features_a, features_b, init_config["lowe_ratio"], max_distance=init_config["match_max_dist"]
+    init_config["matcher"],
+    features_a,
+    features_b,
+    init_config["lowe_ratio"],
+    max_distance=init_config["match_max_dist"],
 )
 
 match_img = generate_match_image(
-    init_images[0], init_images[-1], keypoints_a, keypoints_b, good_matches
+    init_images[0], init_images[-1], features_a, features_b, good_matches
 )
 
 cv2.imshow("Matching", match_img)
@@ -146,6 +165,7 @@ def estimate_pose(keypoints_a, keypoints_b, K, prob=0.999, threshold=1.0):
     # recover camera pose and refine inliers
     _, R, t, pose_mask = cv2.recoverPose(E, pts_a_inliers, pts_b_inliers, K)
 
+    print(f"pose_mask: {pose_mask}")
     pose_mask = (pose_mask > 0).astype(int)
     # Further filter points based on the pose mask
     pts_a_inliers_refined = pts_a_inliers[pose_mask.ravel() == 1]
@@ -172,7 +192,7 @@ t = t * 0.3  # account for scale ambiguity using ground truth of initialization 
 relative_pose_estimate = construct_homogeneous_matrix(R, t)
 print(f"relative_pose_estimate:\n{relative_pose_estimate}")
 print(f"relative_pose_ground_truth:\n{relative_pose_ground_truth}")
-print(compare_poses(relative_pose_ground_truth, relative_pose_estimate))
+print(compare_poses(relative_pose_ground_truth, np.linalg.inv(relative_pose_estimate)))
 
 
 def triangulate_points(pts_a, pts_b, K, relative_pose):
@@ -194,10 +214,31 @@ pts3D, pts4D = triangulate_points(
     pts_a_inliers, pts_b_inliers, K, relative_pose_estimate
 )
 
+# Use solvePnP for pose refinement
+_, rvec, tvec, inliers = cv2.solvePnPRansac(pts3D.T, pts_b_inliers, K, None)
+R_refined, _ = cv2.Rodrigues(rvec)
+t_refined = tvec
+
+if inliers is not None:
+    pts3D = pts3D[:, inliers[:, 0]]
+    pts_b_inliers = pts_b_inliers[inliers[:, 0]]
+
+print(f"R_refined:\n{R_refined}")
+print(f"t_refined:\n{t_refined}")
+print(f"count of inliers: {len(pts_b_inliers)}")
+
+refined_relative_pose_estimate = construct_homogeneous_matrix(R_refined, t_refined)
+print(f"refined_relative_pose_estimate:\n{refined_relative_pose_estimate}")
+print(
+    compare_poses(
+        relative_pose_ground_truth, np.linalg.inv(refined_relative_pose_estimate)
+    )
+)
+
 
 # Reproject points onto the image
 reprojected_pts, _ = cv2.projectPoints(
-    pts3D.T,
+    pts3D,
     relative_pose_estimate[:3, :3],
     relative_pose_estimate[:3, 3:4],
     K,
@@ -242,9 +283,6 @@ def visualize_reprojection_onto_image(img, reprojected_pts, actual_pts, depths):
         # outline in negative color
         cv2.circle(reprojected_img, tuple(pt[0]), 3, (0, 0, 0), 1)
     return reprojected_img
-
-
-# refine pose using PnP
 
 
 def get_normalized_depths(pts3D):
@@ -306,19 +344,23 @@ plt.show()
 # setup
 cont_config = get_config("parking", "continuous")
 visualizer = VOsualizer()
-world_pose = np.linalg.inv(relative_pose_estimate)
+world_pose = relative_pose_estimate
+points_3d_world = pts3D
 print(f"world_pose:\n{world_pose}")
 
 features_a = features_b
+points_3d_a = pts3D # 3d points from the initialization
 for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loader):
     print(f"Processing frame {image_index}...")
-    # detect features
+    
     features_b = detect_features(cont_config["detector"], curr_image)
-    # match features
-
-    # Detect and match features
+    
     keypoints_a, keypoints_b, good_matches = match_features(
-        cont_config["matcher"], features_a, features_b, cont_config["lowe_ratio"], max_distance=cont_config["match_max_dist"]
+        cont_config["matcher"],
+        features_a,
+        features_b,
+        cont_config["lowe_ratio"],
+        max_distance=cont_config["match_max_dist"],
     )
 
     # Estimate pose
@@ -328,23 +370,30 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
 
     relative_pose = construct_homogeneous_matrix(R, t)
     print(f"relative_pose:\n{relative_pose}")
-    world_pose = world_pose @ np.linalg.inv(relative_pose)
+    world_pose = world_pose @ np.linalg.inv(relative_pose) 
     print(f"global_pose:\n{world_pose}")
 
     # Triangulate points
     pts3D, pts4D = triangulate_points(pts_a_inliers, pts_b_inliers, K, relative_pose)
 
+    # Transform new 3D points to the world coordinate system
+    transformed_points_3D = (world_pose[:3, :3] @ pts3D) + world_pose[:3, 3:4]
+
+    # Combine with existing world points
+    points_3d_world = np.hstack((points_3d_world, transformed_points_3D))
+    print(f"len(points_3d_world): {len(points_3d_world)}")
     # Visualization and updates for next iteration
     curr_image = draw_lines_onto_image(curr_image, keypoints_a, keypoints_b)
 
     visualizer.update_image(image=curr_image)
 
-    visualizer.update_world(pose=world_pose, points_3D=pts3D)
+    visualizer.update_world(pose=world_pose, points_3D=points_3d_world)
 
     visualizer.redraw()
 
     # update for next iteration
     features_a = features_b
+    points_3d_world = points_3d_world[:, -len(transformed_points_3D) :]
 
     if not plt.get_fignums():
         break
