@@ -144,15 +144,16 @@ cv2.imshow("Lines", lines_img)
 cv2.waitKey(0)
 
 
-def estimate_pose(keypoints_a, keypoints_b, K, prob=0.999, threshold=1.0):
+def estimate_pose(keypoints_a, keypoints_b, K, prob=0.995, threshold=1.0):
     """Estimates the pose between two images using RANSAC"""
     E, inlier_mask = cv2.findEssentialMat(
         keypoints_a,
         keypoints_b,
         K,
-        method=cv2.RANSAC,
+        method=cv2.LMEDS,
         prob=prob,
         threshold=threshold,
+        # maxIters=3000,
     )
 
     # filter points based on the inlier mask
@@ -165,7 +166,6 @@ def estimate_pose(keypoints_a, keypoints_b, K, prob=0.999, threshold=1.0):
     # recover camera pose and refine inliers
     _, R, t, pose_mask = cv2.recoverPose(E, pts_a_inliers, pts_b_inliers, K)
 
-    print(f"pose_mask: {pose_mask}")
     pose_mask = (pose_mask > 0).astype(int)
     # Further filter points based on the pose mask
     pts_a_inliers_refined = pts_a_inliers[pose_mask.ravel() == 1]
@@ -349,12 +349,12 @@ points_3d_world = pts3D
 print(f"world_pose:\n{world_pose}")
 
 features_a = features_b
-points_3d_a = pts3D # 3d points from the initialization
+points_3d_a = pts3D  # 3d points from the initialization
 for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loader):
     print(f"Processing frame {image_index}...")
-    
+
     features_b = detect_features(cont_config["detector"], curr_image)
-    
+
     keypoints_a, keypoints_b, good_matches = match_features(
         cont_config["matcher"],
         features_a,
@@ -368,9 +368,11 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
         keypoints_a, keypoints_b, K, **cont_config["ransac"]
     )
 
+    t = t * 0.3
+    
     relative_pose = construct_homogeneous_matrix(R, t)
     print(f"relative_pose:\n{relative_pose}")
-    world_pose = world_pose @ np.linalg.inv(relative_pose) 
+    world_pose = world_pose @ np.linalg.inv(relative_pose)
     print(f"global_pose:\n{world_pose}")
 
     # Triangulate points
