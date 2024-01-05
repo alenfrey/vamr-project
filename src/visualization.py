@@ -14,7 +14,7 @@ class VOsualizer:
         self.ax_image = self.fig.add_subplot(2, 2, 1)  # Top left
         self.ax_world = self.fig.add_subplot(2, 2, 2, projection="3d")  # Top right
         self.ax_line = self.fig.add_subplot(2, 2, 4)  # Bottom left
-        self.ax_extra = self.fig.add_subplot(2, 2, 3)  # Bottom right
+        self.ax_points = self.fig.add_subplot(2, 2, 3)  # Bottom right
 
         self.range = 30
         self.pose_history = []  # Store the history of poses
@@ -30,7 +30,7 @@ class VOsualizer:
     def adjust_layout(self):
         # Adjust the spacing between subplots
         self.fig.subplots_adjust(
-            left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.2, hspace=0.2
+            left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.1, hspace=0.1
         )
 
     def setup_axes(self):
@@ -43,7 +43,8 @@ class VOsualizer:
         self.ax_image.axis("off")
         self.ax_image.set_title("Current Frame")
         self.ax_line.set_title("Line Chart")
-        self.ax_extra.set_title("Extra Subplot")  # Title for the extra subplot
+        self.ax_points.set_title("Reprojection")
+        # self.ax_extra.set_title("Extra Subplot")  # Title for the extra subplot
 
     def update_image(self, image):
         if image is not None:
@@ -52,14 +53,14 @@ class VOsualizer:
             self.ax_image.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
     def update_points_plot(self, pts_curr, pts_reprojected):
-        self.ax_extra.clear()
+        self.ax_points.clear()
 
         # Reshape pts_curr to a two-dimensional array of shape (n, 2)
         points = pts_curr.reshape(-1, 2)
 
         # Scatter plot of points
         x, y = points[:, 0], points[:, 1]
-        self.ax_extra.scatter(x, y, c="blue", label="2D Points", alpha=0.5)
+        self.ax_points.scatter(x, y, c="blue", label="2D Points", alpha=0.5)
 
         # Get the bounding box of the image axis
         bbox = self.ax_image.get_window_extent().transformed(
@@ -68,27 +69,27 @@ class VOsualizer:
         width, height = bbox.width, bbox.height
 
         # Set the aspect of the plot to be equal, and match the image aspect ratio
-        self.ax_extra.set_aspect(abs((width / height)))
+        self.ax_points.set_aspect(abs((width / height)))
 
         # Set limits based on the image axis size
-        self.ax_extra.set_xlim(self.ax_image.get_xlim())
-        self.ax_extra.set_ylim(self.ax_image.get_ylim())
+        self.ax_points.set_xlim(self.ax_image.get_xlim())
+        self.ax_points.set_ylim(self.ax_image.get_ylim())
 
-        self.ax_extra.legend()
-        self.ax_extra.set_title("2D Points and Reprojected Points")
-        self.ax_extra.set_xlabel("x")
-        self.ax_extra.set_ylabel("y")
+        self.ax_points.legend()
+        self.ax_points.set_title("2D Points and Reprojected Points")
+        self.ax_points.set_xlabel("x")
+        self.ax_points.set_ylabel("y")
 
         if pts_reprojected is not None:
             points = pts_reprojected.reshape(-1, 2)
-            self.ax_extra.scatter(
+            self.ax_points.scatter(
                 points[:, 0],
                 points[:, 1],
                 c="red",
                 label="Reprojected Points",
                 alpha=0.5,
             )
-            self.ax_extra.legend()
+            self.ax_points.legend()
 
     def update_line_chart(self, new_data):
         if new_data is None:
@@ -146,9 +147,9 @@ class VOsualizer:
         self.ax_world.clear()
         self.setup_axes()
         t = pose[:3, 3]
-        self.ax_world.set_xlim([t[0] - self.range, t[0] + self.range])
-        self.ax_world.set_ylim([t[1] - self.range, t[1] + self.range])
-        self.ax_world.set_zlim([t[2] - self.range, t[2] + self.range])
+        self.ax_world.set_xlim([t[0] - self.range/2, t[0] + self.range/2])
+        self.ax_world.set_ylim([t[1] - self.range/2, t[1] + self.range/2])
+        self.ax_world.set_zlim([t[2] - self.range/2, t[2] + self.range/2])
         self.plot_quiver(pose)
 
         self.pose_history.append(t)
@@ -177,21 +178,15 @@ class VOsualizer:
                 alpha=0.5,
             )
 
-        # scale points_3D
-        if points_3D is None:
-            return
-
-        points_3D = points_3D / 10
-
         self.ax_world.scatter3D(
             points_3D[0, :],
             points_3D[1, :],
             points_3D[2, :],
             c="purple",
-            s=3,
+            s=10,
         )
 
     def redraw(self):
         # Redraw the entire plot
         plt.draw()
-        plt.pause(0.001)
+        plt.pause(0.0001)
