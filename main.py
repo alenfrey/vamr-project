@@ -374,6 +374,7 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
         keypoints_a, keypoints_b, K, **cont_config["ransac"]
     )
 
+    # account for scale ambiguity 
     t = t * 0.1
 
     relative_pose = construct_homogeneous_matrix(R, t)
