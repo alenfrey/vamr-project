@@ -16,7 +16,7 @@ class VOsualizer:
         self.ax_line = self.fig.add_subplot(2, 2, 4)  # Bottom left
         self.ax_extra = self.fig.add_subplot(2, 2, 3)  # Bottom right
 
-        self.range = 100
+        self.range = 30
         self.pose_history = []  # Store the history of poses
         self.ground_truth_pose_history = []  # Store the history of ground truth poses
         self.line_data = {}  # Store data for the line chart
@@ -155,7 +155,7 @@ class VOsualizer:
 
         # TODO: plot the ground truth pose history if available
         if ground_truth_pose is not None:
-            #self.plot_quiver(ground_truth_pose, alpha=0.5)
+            # self.plot_quiver(ground_truth_pose, alpha=0.5)
             self.ground_truth_pose_history.append(ground_truth_pose[:3, 3])
             history_array = np.array(self.ground_truth_pose_history)
             self.ax_world.plot(

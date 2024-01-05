@@ -369,46 +369,29 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
         max_distance=cont_config["match_max_dist"],
     )
 
-    # Estimate relative pose
+    # estimate relative pose
     R, t, pts_a_inliers, pts_b_inliers = estimate_pose(
         keypoints_a, keypoints_b, K, **cont_config["ransac"]
     )
 
-    # account for scale ambiguity 
-    t = t * 0.1
+    # account for scale ambiguity
+    t = t * 0.3
 
     relative_pose = construct_homogeneous_matrix(R, t)
     print(f"relative_pose:\n{relative_pose}")
     world_pose = world_pose @ np.linalg.inv(relative_pose)
     print(f"global_pose:\n{world_pose}")
 
-    # Triangulate points
+    # triangulate points
     pts3D = triangulate_points(pts_a_inliers, pts_b_inliers, K, relative_pose)
     print(f"pts3D {pts3D.shape}")
 
-    # refine pose using pnp ransac
-    _, rvec, tvec, inliers = cv2.solvePnPRansac(pts3D.T, pts_b_inliers, K, None)
-    R_refined, _ = cv2.Rodrigues(rvec)
-    t_refined = tvec
-
-    print(f"R_refined:\n{R_refined}")
-    print(f"t_refined:\n{t_refined}")
-
-    # reproject points
-    reprojected_pts, _ = cv2.projectPoints(
-        pts3D,
-        relative_pose[:3, :3],
-        relative_pose[:3, 3:4],
-        K,
-        None,
-    )
-
-    # Transform new 3D points to the world coordinate system
+    # transform new 3D points to the world coordinate system
     transformed_points_3D = (world_pose[:3, :3] @ pts3D) + world_pose[:3, 3:4]
     points_3d_world = transformed_points_3D
     print(f"len(points_3d_world): {len(points_3d_world)}")
 
-    # Visualization and updates for next iteration
+    # visualization and updates for next iteration
     curr_image = draw_lines_onto_image(curr_image, keypoints_a, keypoints_b)
 
     visualizer.update_image(image=curr_image)
@@ -423,13 +406,10 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
             "# of matches": (number_of_good_matches, iteration),
         }
     )
-    pts_curr = keypoints_b.reshape(-1, 1, 2)
-    visualizer.update_points_plot(pts_curr, reprojected_pts)
     visualizer.redraw()
 
     # update for next iteration
     features_a = features_b
-    points_3d_world = points_3d_world[:, -len(transformed_points_3D) :]
 
     if not plt.get_fignums():
         break
