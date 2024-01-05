@@ -207,12 +207,16 @@ def triangulate_points(pts_a, pts_b, K, relative_pose):
     P1 = K @ P1  # Apply the intrinsic matrix to the second camera
     pts4D = cv2.triangulatePoints(P0, P1, pts_a, pts_b)
     pts3D = pts4D[:3] / pts4D[3]  # Convert from homogeneous to 3D coordinates
-    return pts3D, pts4D
+
+    in_front_of_camera = np.logical_and(
+        (P0 @ pts4D)[-1] < 0,  # Z-coordinate in camera 0's coordinate system
+        (P1 @ pts4D)[-1] < 0,  # Z-coordinate in camera 1's coordinate system
+    )
+    pts3D = pts3D[:, in_front_of_camera]
+    return pts3D
 
 
-pts3D, pts4D = triangulate_points(
-    pts_a_inliers, pts_b_inliers, K, relative_pose_estimate
-)
+pts3D = triangulate_points(pts_a_inliers, pts_b_inliers, K, relative_pose_estimate)
 
 # Use solvePnP for pose refinement
 _, rvec, tvec, inliers = cv2.solvePnPRansac(pts3D.T, pts_b_inliers, K, None)
@@ -234,7 +238,6 @@ print(
         relative_pose_ground_truth, np.linalg.inv(refined_relative_pose_estimate)
     )
 )
-
 
 # Reproject points onto the image
 reprojected_pts, _ = cv2.projectPoints(
@@ -344,17 +347,20 @@ plt.show()
 # setup
 cont_config = get_config("parking", "continuous")
 visualizer = VOsualizer()
-world_pose = relative_pose_estimate
-points_3d_world = pts3D
+world_pose = relative_pose_estimate  # initial pose from bootstrapping
+points_3d = pts3D  # initial 3d points from bootstrapping (triangulation)
 print(f"world_pose:\n{world_pose}")
+points_3d_world = world_pose[:3, :3] @ points_3d + world_pose[:3, 3:4]
 
-features_a = features_b
-points_3d_a = pts3D  # 3d points from the initialization
+print(f"points_3d: {points_3d}")
+features_a = features_b  # features from last frame as initial features for next frame
 for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loader):
     print(f"Processing frame {image_index}...")
 
+    # detect new features
     features_b = detect_features(cont_config["detector"], curr_image)
 
+    # match new features with previous features
     keypoints_a, keypoints_b, good_matches = match_features(
         cont_config["matcher"],
         features_a,
@@ -363,34 +369,61 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
         max_distance=cont_config["match_max_dist"],
     )
 
-    # Estimate pose
+    # Estimate relative pose
     R, t, pts_a_inliers, pts_b_inliers = estimate_pose(
         keypoints_a, keypoints_b, K, **cont_config["ransac"]
     )
 
-    t = t * 0.3
-    
+    t = t * 0.1
+
     relative_pose = construct_homogeneous_matrix(R, t)
     print(f"relative_pose:\n{relative_pose}")
     world_pose = world_pose @ np.linalg.inv(relative_pose)
     print(f"global_pose:\n{world_pose}")
 
     # Triangulate points
-    pts3D, pts4D = triangulate_points(pts_a_inliers, pts_b_inliers, K, relative_pose)
+    pts3D = triangulate_points(pts_a_inliers, pts_b_inliers, K, relative_pose)
+    print(f"pts3D {pts3D.shape}")
+
+    # refine pose using pnp ransac
+    _, rvec, tvec, inliers = cv2.solvePnPRansac(pts3D.T, pts_b_inliers, K, None)
+    R_refined, _ = cv2.Rodrigues(rvec)
+    t_refined = tvec
+
+    print(f"R_refined:\n{R_refined}")
+    print(f"t_refined:\n{t_refined}")
+
+    # reproject points
+    reprojected_pts, _ = cv2.projectPoints(
+        pts3D,
+        relative_pose[:3, :3],
+        relative_pose[:3, 3:4],
+        K,
+        None,
+    )
 
     # Transform new 3D points to the world coordinate system
     transformed_points_3D = (world_pose[:3, :3] @ pts3D) + world_pose[:3, 3:4]
-
-    # Combine with existing world points
-    points_3d_world = np.hstack((points_3d_world, transformed_points_3D))
+    points_3d_world = transformed_points_3D
     print(f"len(points_3d_world): {len(points_3d_world)}")
+
     # Visualization and updates for next iteration
     curr_image = draw_lines_onto_image(curr_image, keypoints_a, keypoints_b)
 
     visualizer.update_image(image=curr_image)
 
-    visualizer.update_world(pose=world_pose, points_3D=points_3d_world)
+    visualizer.update_world(
+        pose=world_pose, points_3D=points_3d_world, ground_truth_pose=actual_pose
+    )
 
+    number_of_good_matches = len(good_matches)
+    visualizer.update_line_chart(
+        {
+            "# of matches": (number_of_good_matches, iteration),
+        }
+    )
+    pts_curr = keypoints_b.reshape(-1, 1, 2)
+    visualizer.update_points_plot(pts_curr, reprojected_pts)
     visualizer.redraw()
 
     # update for next iteration

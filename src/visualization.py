@@ -18,6 +18,7 @@ class VOsualizer:
 
         self.range = 100
         self.pose_history = []  # Store the history of poses
+        self.ground_truth_pose_history = []  # Store the history of ground truth poses
         self.line_data = {}  # Store data for the line chart
         self.time_steps = {}  # Store time steps for each line
 
@@ -116,12 +117,11 @@ class VOsualizer:
         self.ax_line.autoscale_view()
         self.ax_line.set_title("Line Chart")
 
-    def plot_quiver(self, pose):
+    def plot_quiver(self, pose, alpha=1.0):
         # extract the translation vector (current position)
         t = pose[:3, 3]
         R = pose[:3, :3]
         colors = ["r", "g", "b"]
-        self.pose_history.append(t)
         # plotting each axis component
         for i in range(3):
             self.ax_world.quiver(
@@ -133,12 +133,14 @@ class VOsualizer:
                 R[2, i],
                 length=self.range // 8,
                 color=colors[i],
+                alpha=alpha,
             )
 
     def update_world(
         self,
         pose,
         points_3D,
+        ground_truth_pose=None,
     ):
         # update the axes limits based on the current position
         self.ax_world.clear()
@@ -148,6 +150,21 @@ class VOsualizer:
         self.ax_world.set_ylim([t[1] - self.range, t[1] + self.range])
         self.ax_world.set_zlim([t[2] - self.range, t[2] + self.range])
         self.plot_quiver(pose)
+
+        self.pose_history.append(t)
+
+        # TODO: plot the ground truth pose history if available
+        if ground_truth_pose is not None:
+            #self.plot_quiver(ground_truth_pose, alpha=0.5)
+            self.ground_truth_pose_history.append(ground_truth_pose[:3, 3])
+            history_array = np.array(self.ground_truth_pose_history)
+            self.ax_world.plot(
+                history_array[:, 0],
+                history_array[:, 1],
+                history_array[:, 2],
+                color="green",
+                alpha=0.5,
+            )
 
         # plot the pose history
         if self.pose_history:
