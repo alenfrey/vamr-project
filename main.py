@@ -12,9 +12,8 @@ from src.visual_odometry import *
 from collections import namedtuple
 
 
-dataset_loader = ParkingDataLoader(init_frame_indices=[0, 2])
+dataset_loader = MalagaDataLoader(init_frame_indices=[0, 2])
 dataset_name = str(dataset_loader)
-
 
 # -<------------------->- Initialization -<------------------->- #
 
@@ -135,10 +134,6 @@ print(f"points_3d_world.shape: {points_3d_world.shape}")
 
 print(f"points_3d: {points_3d}")
 print(f"number of 3d points: {len(points_3d.T)}")
-all_points = set()
-for point in points_3d_world.T:
-    # Convert the point to a tuple and add it to the set
-    all_points.add(tuple(point))
 
 features_a = (
     features_b  # features from last frame as initial features qqqfor next frame
@@ -184,10 +179,6 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
     points_3d_world = transformed_points_3D
     print(f"len(points_3d_world): {len(points_3d_world)}")
 
-    # add new points to the list of all points
-    for point in transformed_points_3D.T:
-        all_points.add(tuple(point))
-
     rgb_image = cv2.cvtColor(curr_image, cv2.COLOR_BGR2RGB)
     colors = get_colors_from_image(rgb_image, pts_b_inliers)
     # visualization and updates for next iteration
@@ -202,7 +193,6 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
         points_3D=points_3d_world,
         ground_truth_pose=actual_pose,
         colors=colors,
-        all_points=all_points,
     )
 
     number_of_good_matches = len(good_matches)

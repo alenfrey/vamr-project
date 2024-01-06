@@ -152,11 +152,15 @@ class MalagaDataLoader(VODataLoader):
 
     def setup_image_loader(self):
         image_directory = self.dataset_path / "Images"
-        all_images = sorted(image_directory.glob("*.jpg"))
-        left_images = [img for img in all_images if "left" in img.name]
-        return left_images
+        all_images = sorted(image_directory.glob("*left.jpg"))
+        return all_images
 
     def load_image(self, image_path):
         return cv2.imread(str(image_path), self.image_type)
 
-    # TODO: load poses, synchronized with images..
+    def load_poses(self):
+        # Number of images corresponds to the number of identity matrices needed
+        num_images = len(self.image_paths)
+        # Create an identity matrix for each image
+        identity_matrices = [np.eye(4) for _ in range(num_images)]
+        return identity_matrices

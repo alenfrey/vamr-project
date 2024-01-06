@@ -22,6 +22,7 @@ class VOsualizer:
         self.line_data = {}  # Store data for the line chart
         self.time_steps = {}  # Store time steps for each line
 
+        self.all_points = set()  # set to hold all world points for mapping
         self.setup_axes()
         self.adjust_layout()
         plt.ion()
@@ -142,7 +143,6 @@ class VOsualizer:
         points_3D,
         ground_truth_pose=None,
         colors=None,
-        all_points=None,
     ):
         # update the axes limits based on the current position
         self.ax_world.clear()
@@ -154,6 +154,9 @@ class VOsualizer:
         self.plot_quiver(pose)
 
         self.pose_history.append(t)
+        for point in points_3D.T:
+            # Convert the point to a tuple and add it to the set
+            self.all_points.add(tuple(point))
 
         if ground_truth_pose is not None:
             # self.plot_quiver(ground_truth_pose, alpha=0.5)
@@ -183,8 +186,10 @@ class VOsualizer:
             return
 
         # plot all points if available
-        if all_points is not None:
-            all_points_array = np.array(list(all_points)).T  # Transpose to get 3xN shape
+        if self.all_points is not None:
+            all_points_array = np.array(
+                list(self.all_points)
+            ).T  # Transpose to get 3xN shape
             self.ax_world.scatter3D(
                 all_points_array[0, :],
                 all_points_array[1, :],
