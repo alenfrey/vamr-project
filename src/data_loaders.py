@@ -159,4 +159,4 @@ class MalagaDataLoader(VODataLoader):
     def load_image(self, image_path):
         return cv2.imread(str(image_path), self.image_type)
 
-    # load_poses method is not implemented yet, unsure of how to do it atm, need to research more
+    # load_poses method is not implemented yet, needs to be synchronized

@@ -122,9 +122,9 @@ def triangulate_points(pts_a, pts_b, K, relative_pose):
     pts4D = cv2.triangulatePoints(P0, P1, pts_a, pts_b)
     pts3D = pts4D[:3] / pts4D[3]  # convert from homogeneous to 3D coordinates
 
-    in_front_of_camera = np.logical_and(
-        (P0 @ pts4D)[-1] < 0,  # Z-coordinate in camera 0's coordinate system
-        (P1 @ pts4D)[-1] < 0,  # Z-coordinate in camera 1's coordinate system
-    )
-    pts3D = pts3D[:, in_front_of_camera]
+    # in_front_of_camera = np.logical_and(
+    #     (P0 @ pts4D)[-1] < 0,  # Z-coordinate in camera 0's coordinate system
+    #     (P1 @ pts4D)[-1] < 0,  # Z-coordinate in camera 1's coordinate system
+    # )
+    # pts3D = pts3D[:, in_front_of_camera]
     return pts3D

@@ -4,7 +4,7 @@ import pprint
 import matplotlib.pyplot as plt
 
 from src.utils import *
-from src.data_loaders import ParkingDataLoader, KittiDataLoader
+from src.data_loaders import ParkingDataLoader, KittiDataLoader, MalagaDataLoader
 from src.visualization import VOsualizer, scatter_3d_points
 from src.performance_metrics import calculate_reprojection_error
 from src.config import get_config
@@ -12,7 +12,7 @@ from src.visual_odometry import *
 from collections import namedtuple
 
 
-dataset_loader = ParkingDataLoader(init_frame_indices=[0, 2])
+dataset_loader = KittiDataLoader(init_frame_indices=[0, 2])
 dataset_name = str(dataset_loader)
 
 
@@ -27,9 +27,10 @@ K = dataset_loader.load_camera_intrinsics()
 init_images, init_poses, init_indices = zip(*dataset_loader.get_initialization_data())
 pose_a_actual, pose_b_actual = init_poses[0], init_poses[-1]
 relative_pose_ground_truth = np.linalg.inv(pose_a_actual) @ pose_b_actual
+
+
 print(f"relative_pose_ground_truth:\n{relative_pose_ground_truth}")
 print(f"intrinsics:\n{K}")
-
 
 features_a = detect_features(init_config["detector"], init_images[0])
 features_b = detect_features(init_config["detector"], init_images[-1])
@@ -42,7 +43,7 @@ keypoints_a, keypoints_b, good_matches = match_features(
     max_distance=init_config["match_max_dist"],
 )
 
-print
+
 # Generate image of keypoint matching and show it
 match_img = generate_match_image(
     init_images[0], init_images[-1], features_a, features_b, good_matches
@@ -53,7 +54,6 @@ show_image(match_img, "Matches")
 lines_img = draw_lines_onto_image(init_images[-1], keypoints_a, keypoints_b)
 show_image(lines_img, "Lines")
 
-
 # Estimate pose using essential matrix
 R, t, pts_a_inliers, pts_b_inliers = estimate_pose(
     keypoints_a, keypoints_b, K, **init_config["ransac"]
@@ -62,7 +62,8 @@ R, t, pts_a_inliers, pts_b_inliers = estimate_pose(
 print(f"R:\n{R}")
 print(f"t:\n{t}")
 
-t = t * 0.3  # account for scale ambiguity using ground truth of initialization frames..
+# account for scale ambiguity using ground truth of initialization frames..
+t = t * init_config["translation_scale"]
 
 relative_pose_estimate = construct_homogeneous_matrix(R, t)
 print(f"relative_pose_estimate:\n{relative_pose_estimate}")
@@ -71,10 +72,17 @@ print(compare_poses(relative_pose_ground_truth, np.linalg.inv(relative_pose_esti
 
 points_3d = triangulate_points(pts_a_inliers, pts_b_inliers, K, relative_pose_estimate)
 
-# Use solvePnP for pose refinement
-_, rvec, tvec, inliers = cv2.solvePnPRansac(points_3d.T, pts_b_inliers, K, None)
-R_refined, _ = cv2.Rodrigues(rvec)
-t_refined = tvec
+# print cound of 3d points
+print(f"number of 3d points: {len(points_3d.T)}")
+print(f"number of inliers: {len(pts_b_inliers)}")
+
+if len(points_3d.T) == len(pts_b_inliers):
+    # Use solvePnP for pose refinement
+    _, rvec, tvec, inliers = cv2.solvePnPRansac(points_3d.T, pts_b_inliers, K, None)
+    R_refined, _ = cv2.Rodrigues(rvec)
+    t_refined = tvec
+else:
+    print("Not enough points for solvePnP")
 
 # if inliers is not None:
 #     points_3d = points_3d[:, inliers[:, 0]]
@@ -150,7 +158,7 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
     )
 
     # account for scale ambiguity
-    t = t * 0.25
+    t = t * cont_config["translation_scale"]
 
     relative_pose = construct_homogeneous_matrix(R, t)
     print(f"relative_pose:\n{relative_pose}")
@@ -158,11 +166,12 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
     print(f"global_pose:\n{world_pose}")
     print(f"number of 3d points: {len(points_3d)}")
 
-    # TODO: refine pose using solvePnP
-
     # triangulate points
     pts3D = triangulate_points(pts_a_inliers, pts_b_inliers, K, relative_pose)
-    print(f"pts3D {pts3D.shape}")
+
+    # compare length of points and inliers b
+    print(f"len(pts3D): {len(pts3D.T)}")
+    print(f"len(pts_b_inliers): {len(pts_b_inliers)}")
 
     # transform new 3D points to the world coordinate system
     transformed_points_3D = (world_pose[:3, :3] @ pts3D) + world_pose[:3, 3:4]
