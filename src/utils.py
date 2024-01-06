@@ -15,7 +15,6 @@ import cv2
 import numpy as np
 
 
-
 def is_valid_rotation_matrix(R):
     """Checks if a matrix is a valid rotation matrix."""
     return (

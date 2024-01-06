@@ -11,6 +11,7 @@ def detect_features(detector, img):
     keypoints, descriptors = detector.detectAndCompute(img, None)
     return Features(keypoints, descriptors)
 
+
 @timer
 def match_features(matcher, features_a, features_b, lowe_ratio=0.8, max_distance=30):
     """Detects and matches features between two images with cross-check and distance constraint"""
@@ -73,6 +74,7 @@ def generate_match_image(img_a, img_b, features_a, features_b, good_matches):
     )
     return match_img
 
+
 @timer
 def estimate_pose(keypoints_a, keypoints_b, K, prob=0.995, threshold=1.0):
     """Estimates the pose between two images using RANSAC"""
@@ -107,6 +109,7 @@ def estimate_pose(keypoints_a, keypoints_b, K, prob=0.995, threshold=1.0):
     )
 
     return R, t, pts_a_inliers_refined, pts_b_inliers_refined
+
 
 @timer
 def triangulate_points(pts_a, pts_b, K, relative_pose):

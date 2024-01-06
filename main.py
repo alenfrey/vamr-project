@@ -122,7 +122,7 @@ scatter_3d_points(
 
 # setup
 fps_counter = FPSCounter()
-cont_config = get_config("parking", "continuous")
+cont_config = get_config(dataset_name, "continuous")
 visualizer = VOsualizer()
 world_pose = relative_pose_estimate  # initial pose from bootstrapping
 points_3d = points_3d  # initial 3d points from bootstrapping (triangulation)
@@ -201,12 +201,12 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
             "# of matches": (number_of_good_matches, iteration),
         }
     )
-    
+
     visualizer.update_points_plot(
         pts_curr=keypoints_b,
         pts_reprojected=pts_a_inliers,
     )
-    
+
     visualizer.redraw()
 
     # update for next iteration

@@ -16,7 +16,7 @@ class VOsualizer:
         self.ax_line = self.fig.add_subplot(2, 2, 4)  # Bottom left
         self.ax_points = self.fig.add_subplot(2, 2, 3)  # Bottom right
 
-        self.range = 30
+        self.range = 20
         self.pose_history = []  # Store the history of poses
         self.ground_truth_pose_history = []  # Store the history of ground truth poses
         self.line_data = {}  # Store data for the line chart
@@ -149,9 +149,9 @@ class VOsualizer:
         self.ax_world.clear()
         self.setup_axes()
         t = pose[:3, 3]
-        self.ax_world.set_xlim([t[0] - self.range/2, t[0] + self.range/2])
-        self.ax_world.set_ylim([t[1] - self.range/2, t[1] + self.range/2])
-        self.ax_world.set_zlim([t[2] - self.range/2, t[2] + self.range/2])
+        self.ax_world.set_xlim([t[0] - self.range, t[0] + self.range])
+        self.ax_world.set_ylim([t[1] - self.range, t[1] + self.range])
+        self.ax_world.set_zlim([t[2] - self.range, t[2] + self.range])
         self.plot_quiver(pose)
 
         self.pose_history.append(t)
