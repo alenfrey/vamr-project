@@ -6,18 +6,17 @@ import matplotlib.pyplot as plt
 from src.utils import *
 from src.data_loaders import ParkingDataLoader, KittiDataLoader, MalagaDataLoader
 from src.visualization import VOsualizer, scatter_3d_points
-from src.performance_metrics import calculate_reprojection_error
+from src.performance_metrics import calculate_reprojection_error, FPSCounter
 from src.config import get_config
 from src.visual_odometry import *
 from collections import namedtuple
 
 
-dataset_loader = KittiDataLoader(init_frame_indices=[0, 2])
+dataset_loader = ParkingDataLoader(init_frame_indices=[0, 2])
 dataset_name = str(dataset_loader)
 
 
 # -<------------------->- Initialization -<------------------->- #
-
 
 init_config = get_config(dataset_name=dataset_name, mode="initialization")
 pp = pprint.PrettyPrinter(indent=4)
@@ -42,7 +41,6 @@ keypoints_a, keypoints_b, good_matches = match_features(
     init_config["lowe_ratio"],
     max_distance=init_config["match_max_dist"],
 )
-
 
 # Generate image of keypoint matching and show it
 match_img = generate_match_image(
@@ -76,13 +74,10 @@ points_3d = triangulate_points(pts_a_inliers, pts_b_inliers, K, relative_pose_es
 print(f"number of 3d points: {len(points_3d.T)}")
 print(f"number of inliers: {len(pts_b_inliers)}")
 
-if len(points_3d.T) == len(pts_b_inliers):
-    # Use solvePnP for pose refinement
-    _, rvec, tvec, inliers = cv2.solvePnPRansac(points_3d.T, pts_b_inliers, K, None)
-    R_refined, _ = cv2.Rodrigues(rvec)
-    t_refined = tvec
-else:
-    print("Not enough points for solvePnP")
+
+_, rvec, tvec, inliers = cv2.solvePnPRansac(points_3d.T, pts_b_inliers, K, None)
+R_refined, _ = cv2.Rodrigues(rvec)
+t_refined = tvec
 
 # if inliers is not None:
 #     points_3d = points_3d[:, inliers[:, 0]]
@@ -127,6 +122,7 @@ scatter_3d_points(
 # -<------------------->- Continuous Operation -<------------------->- #
 
 # setup
+fps_counter = FPSCounter()
 cont_config = get_config("parking", "continuous")
 visualizer = VOsualizer()
 world_pose = relative_pose_estimate  # initial pose from bootstrapping
@@ -134,9 +130,19 @@ points_3d = points_3d  # initial 3d points from bootstrapping (triangulation)
 print(f"world_pose:\n{world_pose}")
 points_3d_world = to_world_coordinates(points_3d, pose=world_pose)
 
+print(f"points_3d_world: {points_3d_world}")
+print(f"points_3d_world.shape: {points_3d_world.shape}")
+
 print(f"points_3d: {points_3d}")
 print(f"number of 3d points: {len(points_3d.T)}")
-features_a = features_b  # features from last frame as initial features for next frame
+all_points = set()
+for point in points_3d_world.T:
+    # Convert the point to a tuple and add it to the set
+    all_points.add(tuple(point))
+
+features_a = (
+    features_b  # features from last frame as initial features qqqfor next frame
+)
 for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loader):
     print(f"Processing frame {image_index}...")
 
@@ -178,13 +184,25 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
     points_3d_world = transformed_points_3D
     print(f"len(points_3d_world): {len(points_3d_world)}")
 
+    # add new points to the list of all points
+    for point in transformed_points_3D.T:
+        all_points.add(tuple(point))
+
+    rgb_image = cv2.cvtColor(curr_image, cv2.COLOR_BGR2RGB)
+    colors = get_colors_from_image(rgb_image, pts_b_inliers)
     # visualization and updates for next iteration
     curr_image = draw_lines_onto_image(curr_image, keypoints_a, keypoints_b)
 
+    fps = fps_counter.update()
+    fps_counter.put_fps_on_image(curr_image, fps)
     visualizer.update_image(image=curr_image)
 
     visualizer.update_world(
-        pose=world_pose, points_3D=points_3d_world, ground_truth_pose=actual_pose
+        pose=world_pose,
+        points_3D=points_3d_world,
+        ground_truth_pose=actual_pose,
+        colors=colors,
+        all_points=all_points,
     )
 
     number_of_good_matches = len(good_matches)

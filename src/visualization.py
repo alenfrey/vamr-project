@@ -141,6 +141,8 @@ class VOsualizer:
         pose,
         points_3D,
         ground_truth_pose=None,
+        colors=None,
+        all_points=None,
     ):
         # update the axes limits based on the current position
         self.ax_world.clear()
@@ -153,7 +155,6 @@ class VOsualizer:
 
         self.pose_history.append(t)
 
-        # TODO: plot the ground truth pose history if available
         if ground_truth_pose is not None:
             # self.plot_quiver(ground_truth_pose, alpha=0.5)
             self.ground_truth_pose_history.append(ground_truth_pose[:3, 3])
@@ -181,12 +182,26 @@ class VOsualizer:
         if points_3D is None:
             return
 
+        # plot all points if available
+        if all_points is not None:
+            all_points_array = np.array(list(all_points)).T  # Transpose to get 3xN shape
+            self.ax_world.scatter3D(
+                all_points_array[0, :],
+                all_points_array[1, :],
+                all_points_array[2, :],
+                c="gray",
+                s=0.5,
+                alpha=0.1,
+                zorder=0,
+            )
+
         self.ax_world.scatter3D(
             points_3D[0, :],
             points_3D[1, :],
             points_3D[2, :],
-            c="purple",
+            c=colors if colors is not None else "blue",
             s=3,
+            zorder=1,
         )
 
     def redraw(self):
