@@ -15,7 +15,100 @@ import cv2
 import numpy as np
 
 
+
+def is_valid_rotation_matrix(R):
+    """Checks if a matrix is a valid rotation matrix."""
+    return (
+        R.shape == (3, 3)
+        and np.allclose(R.T @ R, np.eye(3), atol=1e-6)
+        and np.isclose(np.linalg.det(R), 1, atol=1e-6)
+    )
+
+
+def to_world_coordinates(points_3d, *, pose=None, R=None, t=None):
+    """
+    Transforms 3D points to world coordinates.
+
+    :param points_3d: 3D points in camera space (numpy array)
+    :param pose: Homogeneous transformation matrix (4x4 numpy array)
+    :param R: Rotation matrix (3x3 numpy array)
+    :param t: Translation vector (3x1 numpy array)
+    """
+    if pose is not None:
+        if R is not None or t is not None:
+            raise ValueError("Provide either 'pose' or both 'R' and 't', not both.")
+        return pose[:3, :3] @ points_3d + pose[:3, 3:4]
+
+    if R is not None and t is not None:
+        return R @ points_3d + t
+
+    raise ValueError("Invalid arguments. Provide either 'pose' or both 'R' and 't'.")
+
+
+def generate_reprojection_image(img, reprojected_pts, actual_pts, depths):
+    reprojected_img = img.copy()
+
+    # Prepare grayscale values and colormap
+    grayscale_values = (depths * 255).astype(np.uint8)
+    colormap = np.stack([grayscale_values] * 3, axis=-1)  # For 3 channels (BGR)
+
+    # Draw reprojected points
+    reprojected_pts_int = reprojected_pts.reshape(-1, 2).astype(np.int32)
+    for pt in reprojected_pts_int:
+        cv2.circle(reprojected_img, tuple(pt), 5, (255, 255, 255), -1)
+        cv2.circle(reprojected_img, tuple(pt), 6, (0, 0, 0), 1)  # Add outline
+
+    # Draw actual points
+    actual_pts_int = actual_pts.reshape(-1, 2).astype(np.int32)
+    for pt, color in zip(actual_pts_int, colormap):
+        bgr_color = tuple(map(int, color))
+        cv2.circle(reprojected_img, tuple(pt), 2, bgr_color, -1)
+        cv2.circle(
+            reprojected_img, tuple(pt), 3, (0, 0, 0), 1
+        )  # Outline in negative color
+
+    return reprojected_img
+
+
+def reproject_points(pts3D, R, t, K):
+    reprojected_pts, _ = cv2.projectPoints(pts3D, R, t, K, None)
+    return reprojected_pts
+
+
+def show_image(img, title="Image"):
+    cv2.imshow(title, img)
+    cv2.waitKey(0)
+
+
+def get_normalized_depths(pts3D):
+    """ Get normalized depths of 3D points""" ""
+    depths = pts3D[2, :]
+    normalized_depths = (depths - np.min(depths)) / (np.max(depths) - np.min(depths))
+    normalized_depths = 1 - normalized_depths
+    return normalized_depths
+
+
+def get_array_stats(arr, name):
+    """
+    Returns the statistics of a numpy array including mean, median, standard deviation, max, and min.
+
+    :param arr: NumPy array
+    :param name: String representing the name of the array
+    :return: Dictionary with the statistics
+    """
+    stats = {
+        "name": name,
+        "mean": np.mean(arr),
+        "median": np.median(arr),
+        "std_dev": np.std(arr),
+        "max": np.max(arr),
+        "min": np.min(arr),
+    }
+    return stats
+
+
 def get_colors_from_image(image, points):
+    """Extract colors from an image at the given points."""
     colors = []
     for pt in points:
         x, y = pt[0]
@@ -26,9 +119,7 @@ def get_colors_from_image(image, points):
 
 
 def ensure_grayscale(image):
-    """
-    Convert an image to grayscale if it is not already.
-    """
+    """Convert an image to grayscale if it is not already."""
     # return image if image.ndim == 2 else cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) -> Alternative short
     # check if the image has more than one channel (i.e., is not grayscale)
     if len(image.shape) > 2 and image.shape[2] > 1:
@@ -39,6 +130,7 @@ def ensure_grayscale(image):
 
 
 def draw_lines_onto_image(image, pts_prev, pts_curr):
+    """Draw lines between the given points onto the image."""
     visualized_image = image.copy()
 
     # Define line thickness
@@ -135,10 +227,12 @@ def download_and_unzip(url: str, target_folder: str):
 
 
 def construct_homogeneous_matrix(R, t):
+    """Construct a 4x4 homogeneous matrix from a 3x3 rotation matrix and a 3x1 translation vector."""
     return np.block([[R, t.reshape(-1, 1)], [np.zeros((1, 3)), np.ones((1, 1))]])
 
 
 def deconstruct_homogeneous_matrix(H):
+    """Deconstruct a 4x4 homogeneous matrix into a 3x3 rotation matrix and a 3x1 translation vector."""
     return H[:3, :3], H[:3, 3]
 
 
@@ -146,14 +240,6 @@ def compare_poses(actual_pose, estimated_pose):
     """
     Compare two 4x4 homogeneous matrices representing poses and return the
     translation and rotation differences.
-
-    Parameters:
-    actual_pose (numpy.ndarray): The ground truth pose as a 4x4 matrix.
-    estimated_pose (numpy.ndarray): The estimated pose as a 4x4 matrix.
-
-    Returns:
-    tuple: A tuple containing the translation difference (float) and the
-           rotation difference in radians (float).
     """
     rotation_actual, translation_actual = deconstruct_homogeneous_matrix(actual_pose)
     rotation_estimated, translation_estimated = deconstruct_homogeneous_matrix(

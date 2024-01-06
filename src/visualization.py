@@ -181,8 +181,6 @@ class VOsualizer:
         if points_3D is None:
             return
 
-        points_3D = points_3D / 10
-
         self.ax_world.scatter3D(
             points_3D[0, :],
             points_3D[1, :],
@@ -195,3 +193,28 @@ class VOsualizer:
         # Redraw the entire plot
         plt.draw()
         plt.pause(0.001)
+
+
+def scatter_3d_points(points_3d, colors=None, title="3D World"):
+    fig = plt.figure(figsize=(12, 10))
+    ax = fig.add_subplot(111, projection="3d")
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    ax.set_title(title)
+
+    # visualize depth of points
+    scatter = ax.scatter(
+        points_3d[0],
+        points_3d[1],
+        points_3d[2],
+        c=colors,
+        marker="o",
+        s=12,
+        cmap="gray",
+        alpha=1.0,
+    )
+
+    ax.view_init(elev=-90, azim=-90)  # viewpoint
+    ax.scatter(0.3, 0, 0, c="red", marker="o", s=300)  # pose
+    plt.show()
