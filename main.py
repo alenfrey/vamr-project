@@ -201,6 +201,12 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
             "# of matches": (number_of_good_matches, iteration),
         }
     )
+    
+    visualizer.update_points_plot(
+        pts_curr=keypoints_b,
+        pts_reprojected=pts_a_inliers,
+    )
+    
     visualizer.redraw()
 
     # update for next iteration
