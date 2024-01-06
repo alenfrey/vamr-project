@@ -1,5 +1,5 @@
 import sys
-from constants import RAW_DATA_DIR_PATH
+from constants import DATA_DIR_PATH
 from src.utils import download_and_unzip
 
 # URLs for each dataset
@@ -10,7 +10,7 @@ DATASETS = {
 }
 
 # Lambda function for downloading a dataset
-download_dataset = lambda name: download_and_unzip(DATASETS[name], RAW_DATA_DIR_PATH)
+download_dataset = lambda name: download_and_unzip(DATASETS[name], DATA_DIR_PATH)
 
 
 def show_menu():

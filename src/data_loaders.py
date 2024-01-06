@@ -3,8 +3,11 @@ This file contains the data loaders for the VO pipeline, to load different datas
 """
 
 from pathlib import Path
+from constants import *
 import numpy as np
 import cv2
+
+# TODO Add option to scale images and K by a factor given as an argument
 
 
 class VODataLoader:
@@ -14,6 +17,7 @@ class VODataLoader:
         self.poses = self.load_poses()
         self.init_frame_indices = init_frame_indices or []
         self.current_image_index = 0
+        self.name = self.dataset_path.name
 
     def load_camera_intrinsics(self):
         pass
@@ -24,10 +28,15 @@ class VODataLoader:
     def load_poses(self):
         pass
 
-    def get_initialization_frames(self):
-        return [
-            self.load_image(self.image_paths[idx]) for idx in self.init_frame_indices
-        ]
+    def get_initialization_data(self):
+        print(f"Total images available: {len(self.image_paths)}")  # Debugging line
+        print(f"Initialization indices: {self.init_frame_indices}")  # Debugging line
+        init_data = []
+        for idx in self.init_frame_indices:
+            image = self.load_image(self.image_paths[idx])
+            pose = self.poses[idx] if self.poses is not None else None
+            init_data.append((image, pose, idx))
+        return init_data
 
     def __iter__(self):
         # start iterating from the frame immediately after the last initialization frame
@@ -47,13 +56,19 @@ class VODataLoader:
 
         return image, pose, index
 
+    def __str__(self):
+        return self.name
+
     def load_image(self, image_path):
         pass
 
 
 class ParkingDataLoader(VODataLoader):
     def __init__(
-        self, dataset_path, init_frame_indices=None, image_type=cv2.IMREAD_GRAYSCALE
+        self,
+        dataset_path=PARKING_DATA_DIR_PATH,
+        init_frame_indices=None,
+        image_type=cv2.IMREAD_UNCHANGED,
     ):
         super().__init__(dataset_path, init_frame_indices)
         # image_type can be cv2.IMREAD_GRAYSCALE or cv2.IMREAD_COLOR or cv2.IMREAD_UNCHANGED
@@ -78,3 +93,74 @@ class ParkingDataLoader(VODataLoader):
         # from the exercise sheet instead of this one
         poses = [np.vstack((pose.reshape(3, 4), [0, 0, 0, 1])) for pose in flat_poses]
         return np.array(poses)
+
+
+class KittiDataLoader(VODataLoader):
+    def __init__(
+        self,
+        dataset_path=KITTI_DATA_DIR_PATH,
+        init_frame_indices=None,
+        image_type=cv2.IMREAD_UNCHANGED,
+    ):
+        super().__init__(dataset_path, init_frame_indices)
+        self.image_type = image_type
+
+    def load_camera_intrinsics(self):
+        # Assuming we are using P2 (3x4 projection matrix for the left color camera)
+        calib_path = self.dataset_path / "05" / "calib.txt"
+        with open(calib_path, "r") as file:
+            lines = file.readlines()
+            for line in lines:
+                if line.startswith("P0"):
+                    values = line.split()[1:]
+                    intrinsic_matrix = np.array([float(v) for v in values]).reshape(
+                        3, 4
+                    )
+                    return intrinsic_matrix[:3, :3]
+        return None
+
+    def setup_image_loader(self):
+        image_directory = self.dataset_path / "05" / "image_0"
+        print(f"Image directory: {image_directory}")
+        return sorted(image_directory.glob("*.png"))
+
+    def load_poses(self):
+        poses_path = self.dataset_path / "poses" / "05.txt"
+        flat_poses = np.genfromtxt(poses_path, dtype=float)
+        poses = [np.vstack((pose.reshape(3, 4), [0, 0, 0, 1])) for pose in flat_poses]
+        return np.array(poses)
+
+    def load_image(self, image_path):
+        return cv2.imread(str(image_path), self.image_type)
+
+
+class MalagaDataLoader(VODataLoader):
+    def __init__(
+        self,
+        dataset_path=MALAGA_DATA_DIR_PATH,
+        init_frame_indices=None,
+        image_type=cv2.IMREAD_UNCHANGED,
+    ):
+        super().__init__(dataset_path, init_frame_indices)
+        self.image_type = image_type
+        self.K = np.array(
+            [[837.619011, 0, 522.434637], [0, 839.808333, 402.367400], [0, 0, 1]]
+        )
+
+    def load_camera_intrinsics(self):
+        return self.K
+
+    def setup_image_loader(self):
+        image_directory = self.dataset_path / "Images"
+        all_images = sorted(image_directory.glob("*left.jpg"))
+        return all_images
+
+    def load_image(self, image_path):
+        return cv2.imread(str(image_path), self.image_type)
+
+    def load_poses(self):
+        # Number of images corresponds to the number of identity matrices needed
+        num_images = len(self.image_paths)
+        # Create an identity matrix for each image
+        identity_matrices = [np.eye(4) for _ in range(num_images)]
+        return identity_matrices
