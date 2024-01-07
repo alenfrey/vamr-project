@@ -38,10 +38,11 @@ To download the datasets, run the python script `download_datasets.py` from the 
 
 ## Testing
 
-This project uses `pytest` and `Hypothesis` for testing to ensure code quality and reliability. Here's how you can run tests and contribute to them.
+This project uses `pytest` and `Hypothesis` for testing to ensure code quality and reliability.
 
 ### Running Tests
 
+The parking dataset needs to be downloaded before running the tests.
 To run the tests, navigate to the project root directory in your terminal and execute the following command:
 
 ```bash

@@ -1,7 +1,6 @@
 import time
 import cv2
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 
 
 def calculate_reprojection_error(projected_points, actual_points):

@@ -198,20 +198,19 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
     fps_counter.put_fps_on_image(curr_image, fps)
     visualizer.update_image(image=curr_image)
 
-    if iteration % 10 == 0:
-        visualizer.update_world(
-            pose=world_pose,
-            points_3D=points_3d_world,
-            colors=colors,
-        )
+    visualizer.update_world(
+        pose=world_pose,
+        points_3D=points_3d_world,
+        colors=colors,
+    )
 
 
-        number_of_good_matches = len(good_matches)
-        visualizer.update_line_chart(
-            {
-                "# of matches": (number_of_good_matches, iteration),
-            }
-        )
+    number_of_good_matches = len(good_matches)
+    visualizer.update_line_chart(
+        {
+            "# of matches": (number_of_good_matches, iteration),
+        }
+    )
 
     visualizer.update_points_plot(
         pts_curr=pts_b_inliers,
