@@ -6,6 +6,8 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.gridspec as gridspec
 from matplotlib import cm
 from src.utils import timer
+from collections import deque
+
 
 
 class VOsualizer:
@@ -34,21 +36,26 @@ class VOsualizer:
         self.time_steps = {}  # Store time steps for each line
 
         self.all_points = set()  # set to hold all world points for mapping
+
+        self.max_points_length = 10000  # Adjust this number based on your needs
+        self.all_points_deque = deque(maxlen=self.max_points_length)
+        self.all_points_set = set()
+
         self.setup_axes()
         self.adjust_layout()
         plt.ion()
         plt.show()
-        
+
     def connect_events(self):
-        self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
-    
+        self.fig.canvas.mpl_connect("key_press_event", self.on_key_press)
+
     def on_key_press(self, event):
         # TODO: set interactive
-        if event.key == 'up':
+        if event.key == "up":
             pass
-        elif event.key == 'down':
+        elif event.key == "down":
             pass
-        
+
     def adjust_layout(self):
         # Adjust the spacing between subplots
         self.fig.subplots_adjust(
@@ -62,6 +69,11 @@ class VOsualizer:
         self.ax_world.set_zlabel("Z")
         self.ax_world.set_title("3D World")
         
+        self.ax_global_traj.set_xlabel("X")
+        self.ax_global_traj.set_ylabel("Y")
+        self.ax_global_traj.set_zlabel("Z")
+        self.ax_global_traj.set_title("Global Trajectory")
+
         self.ax_global_traj.set_xlabel("X")
         self.ax_global_traj.set_ylabel("Y")
         self.ax_global_traj.set_zlabel("Z")
@@ -186,8 +198,15 @@ class VOsualizer:
 
         self.pose_history.append(t)
         for point in points_3D.T:
-            # Convert the point to a tuple and add it to the set
-            self.all_points.add(tuple(point))
+            point_tuple = tuple(point)
+            if point_tuple not in self.all_points_set:
+                self.all_points_set.add(point_tuple)
+                self.all_points_deque.append(point_tuple)
+
+                # If deque is full, remove the oldest point from the set
+                if len(self.all_points_deque) == self.max_points_length:
+                    oldest_point = self.all_points_deque[0]
+                    self.all_points_set.remove(oldest_point)
 
         if ground_truth_pose is not None:
             # self.plot_quiver(ground_truth_pose, alpha=0.5)
@@ -216,11 +235,11 @@ class VOsualizer:
         if points_3D is None:
             return
 
-        # plot all points if available
-        if self.all_points is not None:
+        # Plot all points if available
+        if self.all_points_deque:
             all_points_array = np.array(
-                list(self.all_points)
-            ).T  # Transpose to get 3xN shape
+                list(self.all_points_deque)
+            ).T  # Convert to 3xN shape
             self.ax_world.scatter3D(
                 all_points_array[0, :],
                 all_points_array[1, :],
@@ -272,8 +291,7 @@ class VOsualizer:
                 history_array[:, 2],
                 color="blue",
                 alpha=0.7,
-                linewidth=2
-            )
+                linewidth=2)
 
     def redraw(self):
         # Redraw the entire plot

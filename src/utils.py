@@ -39,7 +39,7 @@ def to_world_coordinates(points_3d, *, pose=None, R=None, t=None):
         return pose[:3, :3] @ points_3d + pose[:3, 3:4]
 
     if R is not None and t is not None:
-        return R @ points_3d + t
+        return R @ points_3d + t 
 
     raise ValueError("Invalid arguments. Provide either 'pose' or both 'R' and 't'.")
 

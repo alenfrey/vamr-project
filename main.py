@@ -14,14 +14,16 @@ from collections import namedtuple
 import sys
 import os
 
-
 def disable_all_print():
     sys.stdout = open(os.devnull, "w")
 
 
-disable_all_print()  # uncomment to disable all print statements for faster execution
+# disable_all_print()  # uncomment to disable all print statements for faster execution
 
 dataset_loader = ParkingDataLoader(init_frame_indices=[0, 2])
+# dataset_loader = KittiDataLoader(init_frame_indices=[0, 2])
+# dataset_loader = MalagaDataLoader(init_frame_indices=[0, 2])
+
 dataset_name = str(dataset_loader)
 
 # -<------------------->- Initialization -<------------------->- #
@@ -171,15 +173,15 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
     # triangulate points
     pts3D = triangulate_points(pts_a_inliers, pts_b_inliers, K, relative_pose)
 
-    _, rvec, tvec, inliers = cv2.solvePnPRansac(pts3D.T, pts_b_inliers, K, None)
-    R_refined, _ = cv2.Rodrigues(rvec)
-    t_refined = tvec
-
-    print(f"R_refined:\n{R_refined}")
-    print(f"t_refined:\n{t_refined}")
-
-    R = R_refined
-    t = t_refined
+    # check if poitns > 4
+    if pts3D.shape[1] > 4:
+        _, rvec, tvec, inliers = cv2.solvePnPRansac(pts3D.T, pts_b_inliers, K, None)
+        R_refined, _ = cv2.Rodrigues(rvec)
+        t_refined = tvec
+        print(f"R_refined:\n{R_refined}")
+        print(f"t_refined:\n{t_refined}")
+        R = R_refined
+        t = t_refined
 
     # reproject points
     reprojected_points = reproject_points(pts3D, R, t, K)
@@ -196,18 +198,20 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
     fps_counter.put_fps_on_image(curr_image, fps)
     visualizer.update_image(image=curr_image)
 
-    visualizer.update_world(
-        pose=world_pose,
-        points_3D=points_3d_world,
-        colors=colors,
-    )
+    if iteration % 10 == 0:
+        visualizer.update_world(
+            pose=world_pose,
+            points_3D=points_3d_world,
+            colors=colors,
+        )
 
-    number_of_good_matches = len(good_matches)
-    visualizer.update_line_chart(
-        {
-            "# of matches": (number_of_good_matches, iteration),
-        }
-    )
+
+        number_of_good_matches = len(good_matches)
+        visualizer.update_line_chart(
+            {
+                "# of matches": (number_of_good_matches, iteration),
+            }
+        )
 
     visualizer.update_points_plot(
         pts_curr=pts_b_inliers,

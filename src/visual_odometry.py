@@ -107,13 +107,20 @@ def estimate_pose(keypoints_a, keypoints_b, K, prob=0.995, threshold=1.0):
     print(
         f"refined number of outlier matches: {len(keypoints_a) - len(pts_a_inliers_refined)}"
     )
-
+    # check if pts_a_inliers_refined and pts_b_inliers have more than 0 elements
+    if len(pts_a_inliers_refined) == 0 or len(pts_b_inliers_refined) == 0:
+        return R, t, pts_a_inliers, pts_b_inliers
     return R, t, pts_a_inliers_refined, pts_b_inliers_refined
 
 
 @timer
 def triangulate_points(pts_a, pts_b, K, relative_pose):
     """Triangulates points from two images"""
+    print(f"Number of points to triangulate: {len(pts_a)}")
+    print(f"pts_b:\n{len(pts_b)}")
+    print(f"K:\n{K}")
+    print(f"relative_pose:\n{relative_pose}")
+    
     R = relative_pose[:3, :3]  # rotation matrix from the relative pose
     t = relative_pose[:3, 3:4]  # translation vector from the relative pose
     P0 = np.hstack(
