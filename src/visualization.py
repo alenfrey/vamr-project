@@ -3,18 +3,29 @@ import numpy as np
 import cv2
 
 from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.gridspec as gridspec
 from matplotlib import cm
+from src.utils import timer
 
 
 class VOsualizer:
     def __init__(self):
         self.fig = plt.figure(figsize=(12, 10))
+        self.connect_events()
+        gs = gridspec.GridSpec(2, 3, height_ratios=[2, 1])
 
-        # Subplots arrangement
-        self.ax_image = self.fig.add_subplot(2, 2, 1)  # Top left
-        self.ax_world = self.fig.add_subplot(2, 2, 2, projection="3d")  # Top right
-        self.ax_line = self.fig.add_subplot(2, 2, 4)  # Bottom left
-        self.ax_points = self.fig.add_subplot(2, 2, 3)  # Bottom right
+        # Top row - spanning full width
+        self.ax_image = self.fig.add_subplot(gs[0, 0:2])  # Top left (full width)
+        self.ax_world = self.fig.add_subplot(
+            gs[0, 2], projection="3d"
+        )  # Top right (3D plot)
+
+        # Bottom row - three plots
+        self.ax_points = self.fig.add_subplot(gs[1, 0])  # Bottom left
+        self.ax_line = self.fig.add_subplot(gs[1, 1])  # Bottom middle
+        self.ax_global_traj = self.fig.add_subplot(
+            gs[1, 2], projection="3d"
+        )  # Bottom right (3D plot)
 
         self.range = 20
         self.pose_history = []  # Store the history of poses
@@ -27,7 +38,17 @@ class VOsualizer:
         self.adjust_layout()
         plt.ion()
         plt.show()
-
+        
+    def connect_events(self):
+        self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
+    
+    def on_key_press(self, event):
+        # TODO: set interactive
+        if event.key == 'up':
+            pass
+        elif event.key == 'down':
+            pass
+        
     def adjust_layout(self):
         # Adjust the spacing between subplots
         self.fig.subplots_adjust(
@@ -40,6 +61,11 @@ class VOsualizer:
         self.ax_world.set_ylabel("Y")
         self.ax_world.set_zlabel("Z")
         self.ax_world.set_title("3D World")
+        
+        self.ax_global_traj.set_xlabel("X")
+        self.ax_global_traj.set_ylabel("Y")
+        self.ax_global_traj.set_zlabel("Z")
+        self.ax_global_traj.set_title("Global Trajectory")
 
         self.ax_image.axis("off")
         self.ax_image.set_title("Current Frame")
@@ -61,7 +87,9 @@ class VOsualizer:
 
         # Scatter plot of points
         x, y = points[:, 0], points[:, 1]
-        self.ax_points.scatter(x, y, c="blue", label="2D Points", alpha=0.5)
+        self.ax_points.scatter(
+            x, y, edgecolors="black", facecolors="white", label="2D Points", s=60
+        )
 
         # Get the bounding box of the image axis
         bbox = self.ax_image.get_window_extent().transformed(
@@ -86,9 +114,10 @@ class VOsualizer:
             self.ax_points.scatter(
                 points[:, 0],
                 points[:, 1],
-                c="red",
+                c="blue",
                 label="Reprojected Points",
-                alpha=0.5,
+                alpha=0.7,
+                s=10,
             )
             self.ax_points.legend()
 
@@ -138,6 +167,7 @@ class VOsualizer:
                 alpha=alpha,
             )
 
+    @timer
     def update_world(
         self,
         pose,
@@ -210,8 +240,44 @@ class VOsualizer:
             zorder=1,
         )
 
+    def update_global_view(self):
+        # Clear the axis for fresh plotting
+        self.ax_global_traj.clear()
+
+        # Set up the axis labels and title
+        self.ax_global_traj.set_xlabel("X")
+        self.ax_global_traj.set_ylabel("Y")
+        self.ax_global_traj.set_zlabel("Z")
+        self.ax_global_traj.set_title("Global Trajectory")
+
+        # Define a large range for a zoomed-out view
+        axis_range = 100  # You can adjust this value as needed
+
+        # Plot the trajectory history if available
+        if self.pose_history:
+            history_array = np.array(self.pose_history)
+
+            # Determine the bounds of the trajectory
+            min_bounds = history_array.min(axis=0) - axis_range
+            max_bounds = history_array.max(axis=0) + axis_range
+
+            # Set axis limits
+            self.ax_global_traj.set_xlim(min_bounds[0], max_bounds[0])
+            self.ax_global_traj.set_ylim(min_bounds[1], max_bounds[1])
+            self.ax_global_traj.set_zlim(min_bounds[2], max_bounds[2])
+
+            self.ax_global_traj.plot(
+                history_array[:, 0],
+                history_array[:, 1],
+                history_array[:, 2],
+                color="blue",
+                alpha=0.7,
+                linewidth=2
+            )
+
     def redraw(self):
         # Redraw the entire plot
+        self.update_global_view()
         plt.draw()
         plt.pause(0.001)
 

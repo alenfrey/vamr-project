@@ -37,7 +37,7 @@ config = {
             "lowe_ratio": 0.5,
             "match_max_dist": 50,
             "ransac": {"prob": 0.999, "threshold": 1.0},
-            "translation_scale": 0.25,
+            "translation_scale": 0.15,
         },
     },
     "kitti": {
@@ -63,7 +63,7 @@ config = {
                 sigma=1.6,
             ),
             "matcher": cv2.FlannBasedMatcher(),
-            "lowe_ratio": 0.5,
+            "lowe_ratio": 0.8,
             "match_max_dist": 50,
             "ransac": {"prob": 0.999, "threshold": 1.0},
             "translation_scale": 0.5,
