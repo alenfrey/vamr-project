@@ -1,5 +1,14 @@
 # Vision Algorithms for Mobile Robotics - Project
 
+## Screencasts
+
+* Parking: https://youtu.be/W_FU94QPROM
+* Kitti: https://youtu.be/BZOVhOeJ-Cw
+* Malaga: https://youtu.be/CdZAbssPqkc
+
+The screencasts were recorded on a Macbook Pro M1 with 16 GiB. 
+The code was executed in the conda environment on the CPU.
+
 ## Installation
 
 ### Prerequisites
