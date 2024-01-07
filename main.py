@@ -14,7 +14,6 @@ from collections import namedtuple
 import sys
 import os
 
-
 def disable_all_print():
     sys.stdout = open(os.devnull, "w")
 
@@ -205,6 +204,7 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
             points_3D=points_3d_world,
             colors=colors,
         )
+
 
         number_of_good_matches = len(good_matches)
         visualizer.update_line_chart(

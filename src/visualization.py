@@ -9,6 +9,7 @@ from src.utils import timer
 from collections import deque
 
 
+
 class VOsualizer:
     def __init__(self):
         self.fig = plt.figure(figsize=(12, 10))
@@ -67,6 +68,11 @@ class VOsualizer:
         self.ax_world.set_ylabel("Y")
         self.ax_world.set_zlabel("Z")
         self.ax_world.set_title("3D World")
+        
+        self.ax_global_traj.set_xlabel("X")
+        self.ax_global_traj.set_ylabel("Y")
+        self.ax_global_traj.set_zlabel("Z")
+        self.ax_global_traj.set_title("Global Trajectory")
 
         self.ax_global_traj.set_xlabel("X")
         self.ax_global_traj.set_ylabel("Y")
@@ -285,8 +291,7 @@ class VOsualizer:
                 history_array[:, 2],
                 color="blue",
                 alpha=0.7,
-                linewidth=2,
-            )
+                linewidth=2)
 
     def redraw(self):
         # Redraw the entire plot
