@@ -7,8 +7,6 @@ from constants import *
 import numpy as np
 import cv2
 
-# TODO Add option to scale images and K by a factor given as an argument
-
 
 class VODataLoader:
     def __init__(self, dataset_path, init_frame_indices=None):
@@ -159,8 +157,7 @@ class MalagaDataLoader(VODataLoader):
         return cv2.imread(str(image_path), self.image_type)
 
     def load_poses(self):
-        # Number of images corresponds to the number of identity matrices needed
+        # number of images corresponds to the number of identity matrices needed
         num_images = len(self.image_paths)
-        # Create an identity matrix for each image
         identity_matrices = [np.eye(4) for _ in range(num_images)]
         return identity_matrices

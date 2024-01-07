@@ -11,8 +11,17 @@ from src.config import get_config
 from src.visual_odometry import *
 from collections import namedtuple
 
+import sys
+import os
 
-dataset_loader = MalagaDataLoader(init_frame_indices=[0, 2])
+
+def disable_all_print():
+    sys.stdout = open(os.devnull, "w")
+
+
+disable_all_print()  # uncomment to disable all print statements for faster execution
+
+dataset_loader = ParkingDataLoader(init_frame_indices=[0, 2])
 dataset_name = str(dataset_loader)
 
 # -<------------------->- Initialization -<------------------->- #
@@ -78,9 +87,9 @@ _, rvec, tvec, inliers = cv2.solvePnPRansac(points_3d.T, pts_b_inliers, K, None)
 R_refined, _ = cv2.Rodrigues(rvec)
 t_refined = tvec
 
-# if inliers is not None:
-#     points_3d = points_3d[:, inliers[:, 0]]
-#     pts_b_inliers = pts_b_inliers[inliers[:, 0]]
+if inliers is not None:
+    points_3d = points_3d[:, inliers[:, 0]]
+    pts_b_inliers = pts_b_inliers[inliers[:, 0]]
 
 print(f"R_refined:\n{R_refined}")
 print(f"t_refined:\n{t_refined}")
@@ -129,15 +138,8 @@ points_3d = points_3d  # initial 3d points from bootstrapping (triangulation)
 print(f"world_pose:\n{world_pose}")
 points_3d_world = to_world_coordinates(points_3d, pose=world_pose)
 
-print(f"points_3d_world: {points_3d_world}")
-print(f"points_3d_world.shape: {points_3d_world.shape}")
+features_a = features_b  # features from last frame as initial features qfor next frame
 
-print(f"points_3d: {points_3d}")
-print(f"number of 3d points: {len(points_3d.T)}")
-
-features_a = (
-    features_b  # features from last frame as initial features qqqfor next frame
-)
 for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loader):
     print(f"Processing frame {image_index}...")
 
@@ -165,19 +167,25 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
     print(f"relative_pose:\n{relative_pose}")
     world_pose = world_pose @ np.linalg.inv(relative_pose)
     print(f"global_pose:\n{world_pose}")
-    print(f"number of 3d points: {len(points_3d)}")
 
     # triangulate points
     pts3D = triangulate_points(pts_a_inliers, pts_b_inliers, K, relative_pose)
 
-    # compare length of points and inliers b
-    print(f"len(pts3D): {len(pts3D.T)}")
-    print(f"len(pts_b_inliers): {len(pts_b_inliers)}")
+    _, rvec, tvec, inliers = cv2.solvePnPRansac(pts3D.T, pts_b_inliers, K, None)
+    R_refined, _ = cv2.Rodrigues(rvec)
+    t_refined = tvec
+
+    print(f"R_refined:\n{R_refined}")
+    print(f"t_refined:\n{t_refined}")
+
+    R = R_refined
+    t = t_refined
+
+    # reproject points
+    reprojected_points = reproject_points(pts3D, R, t, K)
 
     # transform new 3D points to the world coordinate system
-    transformed_points_3D = (world_pose[:3, :3] @ pts3D) + world_pose[:3, 3:4]
-    points_3d_world = transformed_points_3D
-    print(f"len(points_3d_world): {len(points_3d_world)}")
+    points_3d_world = to_world_coordinates(pts3D, pose=world_pose)
 
     rgb_image = cv2.cvtColor(curr_image, cv2.COLOR_BGR2RGB)
     colors = get_colors_from_image(rgb_image, pts_b_inliers)
@@ -191,7 +199,6 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
     visualizer.update_world(
         pose=world_pose,
         points_3D=points_3d_world,
-        ground_truth_pose=actual_pose,
         colors=colors,
     )
 
@@ -203,10 +210,9 @@ for iteration, (curr_image, actual_pose, image_index) in enumerate(dataset_loade
     )
 
     visualizer.update_points_plot(
-        pts_curr=keypoints_b,
-        pts_reprojected=pts_a_inliers,
+        pts_curr=pts_b_inliers,
+        pts_reprojected=reprojected_points,
     )
-
     visualizer.redraw()
 
     # update for next iteration
