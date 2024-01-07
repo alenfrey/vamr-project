@@ -52,25 +52,4 @@ pytest
 
 ### Writing Tests
 
-Our tests are located in the `tests` directory. When writing tests, its helpful to adhere to the following guidelines:
-
-#### Naming Conventions
-   - Test files should be named `test_<module>.py` where `<module>` corresponds to the module being tested.
-   - Test functions should start with `test_`.
-
-#### Structure
-   - Group tests logically by functionality within the test files.
-   - Use `Hypothesis` for generating a wide range of input scenarios, especially for edge cases.
-
-
-## Formatting Code
-Run the following command from the root directory of the project with the Conda environment activated to format the code using Black:
-   ```
-   black .
-   ```
-   
-This is important for being able to compare code changes in git (git diff) in a meaningful way without being distracted by formatting differences.
-
-## Docstring Style
-ToDo: Discuss, decide and add docstring style 
-
+Our tests are located in the `tests` directory.
